@@ -6,15 +6,9 @@ config_setting(
 
 cc_library(
     name = "daqmx",
-    srcs = select({
-        "//conditions:default": ["nidaqmx_prod.cpp"],
-        ":ni_mock": ["nidaqmx_mock.cpp"],
-    }),
     hdrs = [
-        "nidaqmx_api.h",
         "daqmx.h"
     ],
-
     visibility = ["//visibility:public"],
     deps =  select({
         "//conditions:default": ["@nidaqmx"],
@@ -23,16 +17,11 @@ cc_library(
 )
 
 cc_library(
-    name = "nisyscfg",
-    srcs = select({
-        "//conditions:default": ["nisyscfg_prod.cpp"],
-        ":ni_mock": ["nisyscfg_mock.cpp"],
-    }),
+    name = "syscfg",
     hdrs = [
-        "nisyscfg_api.h",
         "nisyscfg.h",
         "nisyscfg_errors.h",
-        # "nisyscfg_wide.h", // double check why we would need this api
+        # "nisyscfg_wide.h", 
     ],
     visibility = ["//visibility:public"],
     deps =  select({
@@ -157,5 +146,41 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "//driver/testutil",
     ],
+    copts = ["/std:c++20"],
+)
+
+cc_library(
+    name = "lib_manager",
+    srcs = [
+        "lib_manager.cpp",
+    ],
+    hdrs = [
+        "lib_manager.h",
+        "daqmx.h",
+        "nisyscfg.h",
+        "nisyscfg_errors.h",
+        "nisyscfg_wide.h",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "daqmx",
+        "syscfg",
+    ],
+    copts = select({
+        "@platforms//os:windows": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
+
+    linkopts =   select({
+        "@platforms//os:windows": ["user32.lib"],
+        "//conditions:default": [],
+    }),
+)
+
+cc_binary(
+    name="test",
+    srcs=["ni_test.cpp"],
+    deps=["lib_manager"],
+    linkopts = ['user32.lib'],
     copts = ["/std:c++20"],
 )
