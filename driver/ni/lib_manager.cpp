@@ -66,7 +66,9 @@ ni::LibraryManager::LibraryManager() : ni_daqmx_library_handle(nullptr), ni_sysc
     NISysCfgFindHardware(nullptr),
     NISysCfgNextResource(nullptr),
     NISysCfgGetResourceProperty(nullptr),
-    NISysCfgGetResourceIndexedProperty(nullptr){}
+    NISysCfgGetResourceIndexedProperty(nullptr){
+        this->loadLibrary();
+    }
 
 
 ni::LibraryManager::~LibraryManager() {
@@ -79,17 +81,22 @@ ni::LibraryManager& ni::LibraryManager::getInstance() {
 }
 
 bool ni::LibraryManager::loadLibrary() {
-    this->ni_daqmx_library_handle  = LoadLibrary("NIDAQmx.dll");
-    this->ni_syscfg_library_handle = LoadLibrary("nisyscfg.dll");
+    const char* dllPath = "C:\\Program Files (x86)\\National Instruments\\Shared\\ExternalCompilerSupport\\C\\lib64\\msvc\\NIDAQmx.lib";
+
+    this->ni_daqmx_library_handle  = LoadLibrary(dllPath);
+ // LoadLibrary("NIDAQmx.lib");
+    // this->ni_syscfg_library_handle = LoadLibrary("nisyscfg.lib");
     if (!ni_daqmx_library_handle) {
         std::cerr << "Error loading NIDAQmx library" << std::endl;
+        DWORD error = GetLastError();
+        std::cerr << "Error code: " << error << std::endl;
         return false;
     } 
 
-    if(!ni_syscfg_library_handle) {
-        std::cerr << "Error loading NISysCfg library" << std::endl;
-        return false;
-    }
+    // if(!ni_syscfg_library_handle) {
+    //     std::cerr << "Error loading NISysCfg library" << std::endl;
+    //     return false;
+    // }
 
     DAQmxCreateDIChan = (DAQmxCreateDIChan_t)GetProcAddress(ni_daqmx_library_handle, "DAQmxCreateDIChan");
     DAQmxCreateDOChan = (DAQmxCreateDOChan_t)GetProcAddress(ni_daqmx_library_handle, "DAQmxCreateDOChan");
