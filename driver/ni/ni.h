@@ -400,6 +400,60 @@ private:
 };
 
 ///////////////////////////////////////////////////////////////////////////////////
+//                                    AnalogWriteSink                            //
+///////////////////////////////////////////////////////////////////////////////////
+class AnalogWriteSink final : public pipeline::Sink {
+public:
+    explicit AnalogWriteSink(TaskHandle task_handle,
+                              const std::shared_ptr<task::Context> &ctx,
+                              const synnax::Task &task);
+
+    ~AnalogWriteSink();
+
+    int init();
+
+    freighter::Error write(synnax::Frame frame) override;
+
+    freighter::Error stop();
+
+    freighter::Error start();
+
+    freighter::Error start_ni();
+
+    freighter::Error stop_ni();
+
+    freighter::Error cycle();
+    
+    std::vector<synnax::ChannelKey> get_cmd_channel_keys();
+
+    void get_index_keys();
+
+    bool ok();
+
+    void jsonify_error(std::string);
+
+    void stoppedWithErr(const freighter::Error &err) override;
+
+    void log_error(std::string err_msg);
+
+    void clear_task();
+
+private:
+    freighter::Error format_data(const synnax::Frame &frame);
+
+    void parse_config(config::Parser &parser);
+
+    int check_ni_error(int32 error);
+
+    uint8_t *write_buffer = nullptr;
+
+    uint64_t num_AO_channels = 0;
+}
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////
 //                                    Scanner                                    //
 ///////////////////////////////////////////////////////////////////////////////////
 class Scanner final {
