@@ -319,22 +319,6 @@ private:
 ///////////////////////////////////////////////////////////////////////////////////
 //                                    DigitalWriteSink                           //
 ///////////////////////////////////////////////////////////////////////////////////
-struct WriterConfig {
-    std::vector<ChannelConfig> channels;
-    float state_rate = 0;
-    std::string device_name;
-    std::string device_key;
-    std::string task_name;
-    synnax::ChannelKey task_key;
-
-    std::vector<synnax::ChannelKey> state_channel_keys;
-    std::vector<synnax::ChannelKey> drive_cmd_channel_keys;
-
-    synnax::ChannelKey state_index_key;
-    std::queue<synnax::ChannelKey> modified_state_keys;
-    std::queue<std::uint8_t> modified_state_values;
-};
-
 class DigitalWriteSink final : public pipeline::Sink {
 public:
     explicit DigitalWriteSink(TaskHandle task_handle,
@@ -376,6 +360,23 @@ public:
     std::shared_ptr<ni::StateSource> writer_state_source;
 
 private:
+    /// @brief configuration for the digital writer
+    struct WriterConfig {
+        std::vector<ChannelConfig> channels;
+        float state_rate = 0;
+        std::string device_name;
+        std::string device_key;
+        std::string task_name;
+        synnax::ChannelKey task_key;
+
+        std::vector<synnax::ChannelKey> state_channel_keys;
+        std::vector<synnax::ChannelKey> drive_cmd_channel_keys;
+
+        synnax::ChannelKey state_index_key;
+        std::queue<synnax::ChannelKey> modified_state_keys;
+        std::queue<std::uint8_t> modified_state_values;
+    };
+
     freighter::Error format_data(const synnax::Frame &frame);
 
     void parse_config(config::Parser &parser);
@@ -397,6 +398,7 @@ private:
     breaker::Breaker breaker;
     synnax::Task task;
     std::map<std::string, std::string> channel_map;
+
 };
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -439,15 +441,24 @@ public:
     void clear_task();
 
 private:
-    freighter::Error format_data(const synnax::Frame &frame);
-
     void parse_config(config::Parser &parser);
 
     int check_ni_error(int32 error);
 
-    uint8_t *write_buffer = nullptr;
+    double *write_buffer = nullptr;
+    uint64_t num_ao_channels = 0;
+    TaskHandle task_handle = 0;
+    WriterConfig writer_config;
+    int num_samples_per_channel = 0;
+    int buffer_size = 0;
+    
+    json err_info;
+    std::shared_ptr<task::Context> ctx;
+    breaker::Breaker breaker;
 
-    uint64_t num_AO_channels = 0;
+    synnax::Task task;
+    loop::Timer timer;
+    loop::Timer sample_timer;
 }
 
 
