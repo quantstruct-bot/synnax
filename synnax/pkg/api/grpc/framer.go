@@ -117,7 +117,7 @@ func (t frameWriterRequestTranslator) Forward(
 			ControlSubject:           translateControlSubjectForward(msg.Config.ControlSubject),
 			ErrOnUnauthorized:        msg.Config.ErrOnUnauthorized,
 		},
-		Frame: translateFrameForward(msg.Frame),
+		//Frame: translateFrameForward(msg.Frame),
 	}, nil
 }
 
@@ -141,7 +141,7 @@ func (t frameWriterRequestTranslator) Backward(
 			ErrOnUnauthorized:        msg.Config.ErrOnUnauthorized,
 		}
 	}
-	r.Frame = translateFrameBackward(msg.Frame)
+	//r.Frame = translateFrameBackward(msg.Frame)
 	return
 }
 

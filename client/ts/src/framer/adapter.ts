@@ -22,6 +22,7 @@ import {
   retrieveRequired,
 } from "@/channel/retriever";
 import { ValidationError } from "@/errors";
+import { Codec } from "@/framer/encoder";
 import { type CrudeFrame, Frame } from "@/framer/frame";
 
 export class ReadFrameAdapter {
@@ -77,11 +78,13 @@ export class WriteFrameAdapter {
   private adapter: Map<Name, Key> | null;
   retriever: Retriever;
   keys: Key[];
+  codec: Codec;
 
   private constructor(retriever: Retriever) {
     this.retriever = retriever;
     this.adapter = null;
     this.keys = [];
+    this.codec = new Codec([], []);
   }
 
   static async open(
@@ -103,6 +106,10 @@ export class WriteFrameAdapter {
     const results = await retrieveRequired(this.retriever, channels);
     this.adapter = new Map<Name, Key>(results.map((c) => [c.name, c.key]));
     this.keys = results.map((c) => c.key);
+    this.codec = new Codec(
+      this.keys,
+      results.map((c) => c.dataType),
+    );
   }
 
   private async fetchChannel(ch: Key | Name): Promise<Payload> {
@@ -115,6 +122,10 @@ export class WriteFrameAdapter {
     if (typeof k === "number") return k;
     const res = await this.fetchChannel(k);
     return res.key;
+  }
+
+  encode(frame: Frame): Uint8Array {
+    return this.codec.encode(frame.toPayload());
   }
 
   async adapt(
