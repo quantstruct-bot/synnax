@@ -22,7 +22,7 @@ import {
   retrieveRequired,
 } from "@/channel/retriever";
 import { ValidationError } from "@/errors";
-import { Codec } from "@/framer/encoder";
+import { Codec } from "@/framer/codec";
 import { type CrudeFrame, Frame } from "@/framer/frame";
 
 export class ReadFrameAdapter {

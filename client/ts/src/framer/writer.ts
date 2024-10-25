@@ -11,13 +11,12 @@ import {
   decodeError,
   errorZ,
   type Stream,
-  type StreamClient,
+  WebSocketClient,
 } from "@synnaxlabs/freighter";
-import { binary, control } from "@synnaxlabs/x";
+import { control } from "@synnaxlabs/x";
 import {
   type CrudeSeries,
   type CrudeTimeStamp,
-  Size,
   TimeSpan,
   TimeStamp,
 } from "@synnaxlabs/x/telem";
@@ -27,10 +26,11 @@ import { z } from "zod";
 import { type KeyOrName, type KeysOrNames, type Params } from "@/channel/payload";
 import { type Retriever } from "@/channel/retriever";
 import { WriteFrameAdapter } from "@/framer/adapter";
+import { WSWriterCodec } from "@/framer/codec";
 import { type CrudeFrame, frameZ } from "@/framer/frame";
 import { StreamProxy } from "@/framer/streamProxy";
 
-enum Command {
+export enum WriterCommand {
   Open = 0,
   Write = 1,
   Commit = 2,
@@ -76,17 +76,17 @@ const netConfigZ = z.object({
 type Config = z.infer<typeof netConfigZ>;
 
 const reqZ = z.object({
-  command: z.nativeEnum(Command),
+  command: z.nativeEnum(WriterCommand),
   config: netConfigZ.optional(),
   frame: frameZ.optional(),
   buffer: z.instanceof(Uint8Array).optional(),
 });
 
-type Request = z.infer<typeof reqZ>;
+export type WriteRequest = z.infer<typeof reqZ>;
 
 const resZ = z.object({
   ack: z.boolean(),
-  command: z.nativeEnum(Command),
+  command: z.nativeEnum(WriterCommand),
   error: errorZ.optional().nullable(),
 });
 
@@ -177,7 +177,7 @@ export class Writer {
 
   static async _open(
     retriever: Retriever,
-    client: StreamClient,
+    client: WebSocketClient,
     {
       channels,
       start = TimeStamp.now(),
@@ -191,10 +191,12 @@ export class Writer {
     }: WriterConfig,
   ): Promise<Writer> {
     const adapter = await WriteFrameAdapter.open(retriever, channels);
+    if (useExperimentalCodec)
+      client = client.withCodec(new WSWriterCodec(adapter.codec));
     const stream = await client.stream(Writer.ENDPOINT, reqZ, resZ);
     const writer = new Writer(stream, adapter, useExperimentalCodec);
     await writer.execute({
-      command: Command.Open,
+      command: WriterCommand.Open,
       config: {
         start: new TimeStamp(start),
         keys: adapter.keys,
@@ -239,19 +241,12 @@ export class Writer {
     series?: CrudeSeries | CrudeSeries[],
   ): Promise<boolean> {
     const frame = await this.adapter.adapt(channelsOrData, series);
-    let req: Request;
-    if (this.useExperimentalCodec) {
-      req = { command: Command.Write, buffer: this.adapter.encode(frame) };
-    } else {
-      req = { command: Command.Write, frame: frame.toPayload() };
-    }
-    this._bytesWritten += binary.JSON_CODEC.encode(req).byteLength;
+    const req: WriteRequest = {
+      command: WriterCommand.Write,
+      frame: frame.toPayload(),
+    };
     this.stream.send(req);
     return true;
-  }
-
-  get byteLength(): Size {
-    return new Size(this._bytesWritten);
   }
 
   async setAuthority(value: number): Promise<boolean>;
@@ -278,7 +273,10 @@ export class Writer {
         authorities: Object.values(oValue),
       };
     }
-    const response = await this.execute({ command: Command.SetAuthority, config });
+    const response = await this.execute({
+      command: WriterCommand.SetAuthority,
+      config,
+    });
     return response.ack;
   }
 
@@ -292,7 +290,7 @@ export class Writer {
    */
   async commit(): Promise<boolean> {
     if (this.errorAccumulated) return false;
-    const res = await this.execute({ command: Command.Commit });
+    const res = await this.execute({ command: WriterCommand.Commit });
     return res.ack;
   }
 
@@ -301,8 +299,8 @@ export class Writer {
    * state, allowing the writer to be used again.
    */
   async error(): Promise<Error | null> {
-    this.stream.send({ command: Command.Error });
-    const res = await this.execute({ command: Command.Error });
+    this.stream.send({ command: WriterCommand.Error });
+    const res = await this.execute({ command: WriterCommand.Error });
     return res.error != null ? decodeError(res.error) : null;
   }
 
@@ -315,7 +313,7 @@ export class Writer {
     await this.stream.closeAndAck();
   }
 
-  async execute(req: Request): Promise<Response> {
+  async execute(req: WriteRequest): Promise<Response> {
     this.stream.send(req);
     while (true) {
       const res = await this.stream.receive();
