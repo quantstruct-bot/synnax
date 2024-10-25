@@ -27,7 +27,7 @@ import { type KeyOrName, type KeysOrNames, type Params } from "@/channel/payload
 import { type Retriever } from "@/channel/retriever";
 import { WriteFrameAdapter } from "@/framer/adapter";
 import { WSWriterCodec } from "@/framer/codec";
-import { type CrudeFrame, Frame, frameZ } from "@/framer/frame";
+import { type CrudeFrame, frameZ } from "@/framer/frame";
 import { StreamProxy } from "@/framer/streamProxy";
 
 export enum WriterCommand {
@@ -162,17 +162,14 @@ export class Writer {
   private static readonly ENDPOINT = "/frame/write";
   private readonly stream: StreamProxy<typeof reqZ, typeof resZ>;
   private readonly adapter: WriteFrameAdapter;
-  private readonly useExperimentalCodec: boolean;
   private _bytesWritten: number = 0;
 
   private constructor(
     stream: Stream<typeof reqZ, typeof resZ>,
     adapter: WriteFrameAdapter,
-    useExperimentalCodec = false,
   ) {
     this.stream = new StreamProxy("Writer", stream);
     this.adapter = adapter;
-    this.useExperimentalCodec = useExperimentalCodec;
   }
 
   static async _open(
@@ -187,14 +184,14 @@ export class Writer {
       errOnUnauthorized = false,
       enableAutoCommit = false,
       autoIndexPersistInterval = TimeSpan.SECOND,
-      useExperimentalCodec = false,
+      useExperimentalCodec = true,
     }: WriterConfig,
   ): Promise<Writer> {
     const adapter = await WriteFrameAdapter.open(retriever, channels);
     if (useExperimentalCodec)
       client = client.withCodec(new WSWriterCodec(adapter.codec));
     const stream = await client.stream(Writer.ENDPOINT, reqZ, resZ);
-    const writer = new Writer(stream, adapter, useExperimentalCodec);
+    const writer = new Writer(stream, adapter);
     await writer.execute({
       command: WriterCommand.Open,
       config: {

@@ -29,11 +29,13 @@ export class ReadFrameAdapter {
   private adapter: Map<Key, Name> | null;
   retriever: Retriever;
   keys: Key[];
+  codec: Codec;
 
   private constructor(retriever: Retriever) {
     this.retriever = retriever;
     this.adapter = null;
     this.keys = [];
+    this.codec = new Codec([], []);
   }
 
   static async open(retriever: Retriever, channels: Params): Promise<ReadFrameAdapter> {
@@ -44,12 +46,16 @@ export class ReadFrameAdapter {
 
   async update(channels: Params): Promise<void> {
     const { variant, normalized } = analyzeChannelParams(channels);
+    const fetched = await this.retriever.retrieve(normalized);
+    this.codec = new Codec(
+      fetched.map((c) => c.key),
+      fetched.map((c) => c.dataType),
+    );
     if (variant === "keys") {
       this.adapter = null;
       this.keys = normalized as Key[];
       return;
     }
-    const fetched = await this.retriever.retrieve(normalized);
     const a = new Map<Key, Name>();
     this.adapter = a;
     normalized.forEach((name) => {

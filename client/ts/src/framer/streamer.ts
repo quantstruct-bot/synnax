@@ -7,28 +7,34 @@
 // License, use of this software will be governed by the Apache License, Version 2.0,
 // included in the file licenses/APL.txt.
 
-import { EOF, errorZ, type Stream, type StreamClient } from "@synnaxlabs/freighter";
+import { EOF, errorZ, type Stream, WebSocketClient } from "@synnaxlabs/freighter";
 import { observe } from "@synnaxlabs/x";
 import { z } from "zod";
 
 import { type Key, type Params } from "@/channel/payload";
 import { type Retriever } from "@/channel/retriever";
 import { ReadFrameAdapter } from "@/framer/adapter";
+import { WSStreamerCodec } from "@/framer/codec";
 import { Frame, frameZ } from "@/framer/frame";
 import { StreamProxy } from "@/framer/streamProxy";
 
-const reqZ = z.object({ keys: z.number().array() , downsampleFactor: z.number() });
+const reqZ = z.object({ keys: z.number().array(), downsampleFactor: z.number() });
+
+export type StreamerRequest = z.infer<typeof reqZ>;
 
 const resZ = z.object({
   frame: frameZ,
   error: errorZ.optional().nullable(),
 });
 
+export type StreamerResponse = z.infer<typeof resZ>;
+
 const ENDPOINT = "/frame/stream";
 
 export interface StreamerConfig {
   channels: Params;
   downsampleFactor?: number;
+  useExperimentalCodec?: boolean;
 }
 
 export class Streamer implements AsyncIterator<Frame>, AsyncIterable<Frame> {
@@ -51,10 +57,12 @@ export class Streamer implements AsyncIterator<Frame>, AsyncIterable<Frame> {
 
   static async _open(
     retriever: Retriever,
-    client: StreamClient,
-    { channels, downsampleFactor }: StreamerConfig,
+    client: WebSocketClient,
+    { channels, downsampleFactor, useExperimentalCodec = true }: StreamerConfig,
   ): Promise<Streamer> {
     const adapter = await ReadFrameAdapter.open(retriever, channels);
+    if (useExperimentalCodec)
+      client = client.withCodec(new WSStreamerCodec(adapter.codec));
     const stream = await client.stream(ENDPOINT, reqZ, resZ);
     const streamer = new Streamer(stream, adapter);
     stream.send({ keys: adapter.keys, downsampleFactor: downsampleFactor ?? 1 });
@@ -79,7 +87,10 @@ export class Streamer implements AsyncIterator<Frame>, AsyncIterable<Frame> {
 
   async update(channels: Params): Promise<void> {
     await this.adapter.update(channels);
-    this.stream.send({ keys: this.adapter.keys, downsampleFactor: this.downsampleFactor });
+    this.stream.send({
+      keys: this.adapter.keys,
+      downsampleFactor: this.downsampleFactor,
+    });
   }
 
   close(): void {
