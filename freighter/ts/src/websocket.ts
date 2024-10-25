@@ -65,7 +65,8 @@ class WebSocketStream<RQ extends z.ZodTypeAny, RS extends z.ZodTypeAny = RQ>
   send(req: z.input<RQ>): Error | null {
     if (this.serverClosed != null) return new EOF();
     if (this.sendClosed) throw new StreamClosed();
-    this.ws.send(this.encoder.encode({ type: "data", payload: req }));
+    const encoded = this.encoder.encode({ type: "data", payload: req });
+    this.ws.send(encoded);
     return null;
   }
 
@@ -207,13 +208,9 @@ export class WebSocketClient extends MiddlewareCollector implements StreamClient
     resSchema: RS,
   ): Promise<WebSocketStream<RQ, RS> | Error> {
     return await new Promise((resolve) => {
-      ws.onopen = () => {
+      ws.onopen = () =>
         resolve(new WebSocketStream<RQ, RS>(ws, this.encoder, reqSchema, resSchema));
-      };
-      ws.onerror = (ev: Event) => {
-        const ev_ = ev as ErrorEvent;
-        resolve(new Error(ev_.message));
-      };
+      ws.onerror = (ev: Event) => resolve(new Error((ev as ErrorEvent).message));
     });
   }
 }

@@ -27,7 +27,7 @@ import { type KeyOrName, type KeysOrNames, type Params } from "@/channel/payload
 import { type Retriever } from "@/channel/retriever";
 import { WriteFrameAdapter } from "@/framer/adapter";
 import { WSWriterCodec } from "@/framer/codec";
-import { type CrudeFrame, frameZ } from "@/framer/frame";
+import { type CrudeFrame, Frame, frameZ } from "@/framer/frame";
 import { StreamProxy } from "@/framer/streamProxy";
 
 export enum WriterCommand {
@@ -241,10 +241,8 @@ export class Writer {
     series?: CrudeSeries | CrudeSeries[],
   ): Promise<boolean> {
     const frame = await this.adapter.adapt(channelsOrData, series);
-    const req: WriteRequest = {
-      command: WriterCommand.Write,
-      frame: frame.toPayload(),
-    };
+    const pld = frame.toPayload();
+    const req: WriteRequest = { command: WriterCommand.Write, frame: pld };
     this.stream.send(req);
     return true;
   }
