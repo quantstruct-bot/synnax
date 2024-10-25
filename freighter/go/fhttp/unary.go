@@ -27,11 +27,11 @@ import (
 )
 
 type unaryServer[RQ, RS freighter.Payload] struct {
+	serverOptions
+	path string
 	freighter.Reporter
 	freighter.MiddlewareCollector
 	requestParser func(*fiber.Ctx, httputil.Codec) (RQ, error)
-	internal      bool
-	path          string
 	handle        func(ctx context.Context, rq RQ) (RS, error)
 }
 
@@ -41,7 +41,7 @@ func (s *unaryServer[RQ, RS]) BindHandler(handle func(ctx context.Context, rq RQ
 
 func (s *unaryServer[RQ, RS]) fiberHandler(c *fiber.Ctx) error {
 	c.Accepts(httputil.SupportedContentTypes()...)
-	codec, err := httputil.DetermineCodec(c.Get(fiber.HeaderContentType))
+	codec, err := httputil.ResolveCodec(c.Get(fiber.HeaderContentType))
 	if err != nil {
 		return err
 	}

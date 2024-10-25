@@ -25,3 +25,4 @@ export type { Stream, StreamClient } from "@/stream";
 export type { UnaryClient } from "@/unary";
 export { sendRequired } from "@/unary";
 export { WebSocketClient } from "@/websocket";
+export { type WebsocketMessage } from "@/websocket";

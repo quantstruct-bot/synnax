@@ -252,12 +252,12 @@ func mdToHeaders(md freighter.Context) http.Header {
 }
 
 type streamServer[RQ, RS freighter.Payload] struct {
+	serverOptions
 	freighter.Reporter
 	freighter.MiddlewareCollector
 	alamos.Instrumentation
 	serverCtx     context.Context
 	path          string
-	internal      bool
 	handler       func(ctx context.Context, server freighter.ServerStream[RQ, RS]) error
 	writeDeadline time.Duration
 	wg            *sync.WaitGroup
@@ -277,7 +277,7 @@ func (s *streamServer[RQ, RS]) fiberHandler(fiberCtx *fiber.Ctx) error {
 	}
 	iMD := parseRequestCtx(fiberCtx, address.Address(s.path))
 	headerContentType := iMD.Params.GetDefault(fiber.HeaderContentType, "").(string)
-	codec, err := httputil.DetermineCodec(headerContentType)
+	codec, err := s.codecResolver(headerContentType)
 	if err != nil {
 		// If we can't determine the encoder/decoder, we can't continue, so we sent the
 		// best effort string.
