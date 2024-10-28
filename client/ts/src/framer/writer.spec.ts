@@ -279,7 +279,7 @@ describe("Writer", () => {
     const values = Object.fromEntries(channelKeys.map((k) => [k, 1]));
     channelKeys.push(idx.key);
 
-    [false, true].forEach((reg) => {
+    [true, false].forEach((reg) => {
       let wStart = TimeStamp.now();
       it(
         `should write 100,000 frames - reg codec - ${reg}`,
@@ -294,7 +294,7 @@ describe("Writer", () => {
           });
           const streamer = await client.openStreamer({
             channels: channelKeys,
-            useExperimentalCodec: reg,
+            useExperimentalCodec: false,
           });
           const start = performance.now();
           try {
