@@ -20,6 +20,7 @@ import {
   type Triggers,
 } from "@synnaxlabs/pluto";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PostHogProvider } from "posthog-js/react";
 import { type ReactElement, useCallback, useEffect } from "react";
 import { useDispatch } from "react-redux";
 
@@ -155,17 +156,28 @@ const MainUnderContext = (): ReactElement => {
   );
 };
 
+import posthog from "posthog-js";
+
+const phClient = posthog.init("phc_UilxNDaUWDRcJ2G2aqzQEVPTxObKadiPVIY1eoMAlvx", {
+  api_host: "https://us.i.posthog.com",
+  person_profiles: "always",
+});
+
+posthog.capture("my event", { property: "value" });
+
 export const Console = (): ReactElement => (
   <ErrorOverlayWithoutStore>
     <Provider store={store}>
       <ErrorOverlayWithStore>
-        <Layout.RendererProvider value={LAYOUT_RENDERERS}>
-          <Layout.ContextMenuProvider value={CONTEXT_MENU_RENDERERS}>
-            <Ontology.ServicesProvider services={SERVICES}>
-              <MainUnderContext />
-            </Ontology.ServicesProvider>
-          </Layout.ContextMenuProvider>
-        </Layout.RendererProvider>
+        <PostHogProvider client={phClient}>
+          <Layout.RendererProvider value={LAYOUT_RENDERERS}>
+            <Layout.ContextMenuProvider value={CONTEXT_MENU_RENDERERS}>
+              <Ontology.ServicesProvider services={SERVICES}>
+                <MainUnderContext />
+              </Ontology.ServicesProvider>
+            </Layout.ContextMenuProvider>
+          </Layout.RendererProvider>
+        </PostHogProvider>
       </ErrorOverlayWithStore>
     </Provider>
   </ErrorOverlayWithoutStore>

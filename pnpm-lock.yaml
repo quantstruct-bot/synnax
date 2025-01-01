@@ -245,6 +245,9 @@ importers:
       compromise-dates:
         specifier: ^3.7.0
         version: 3.7.0(compromise@14.14.3)
+      posthog-js:
+        specifier: ^1.201.0
+        version: 1.201.0
       proxy-memoize:
         specifier: 2.0.3
         version: 2.0.3

@@ -7,7 +7,7 @@
 // License, use of this software will be governed by the Apache License, Version 2.0,
 // included in the file licenses/APL.txt.
 
-import { Instrumentation } from "@synnaxlabs/alamos";
+import { Analytics, Instrumentation } from "@synnaxlabs/alamos";
 import {
   createContext,
   type PropsWithChildren,
@@ -22,16 +22,20 @@ import { useMemoDeepEqualProps } from "@/memo";
 
 export interface ContextValue {
   instrumentation: Instrumentation;
+  analytics: Analytics;
 }
 
 const Context = createContext<ContextValue>({
   instrumentation: Instrumentation.NOOP,
+  analytics: Analytics.NOOP,
 });
 
 export interface ProviderProps extends PropsWithChildren, alamos.ProviderState {}
 
 export const useInstrumentation = (): Instrumentation =>
   useContext(Context).instrumentation;
+
+export const useAnalytics = (): Analytics => useContext(Context).analytics;
 
 export const Provider = Aether.wrap<ProviderProps>(
   alamos.Provider.TYPE,
