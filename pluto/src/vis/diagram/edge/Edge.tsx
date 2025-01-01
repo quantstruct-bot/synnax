@@ -11,6 +11,7 @@ import "@/vis/diagram/edge/Edge.css";
 
 import { box, direction, location, xy } from "@synnaxlabs/x";
 import {
+  BezierEdge,
   type ConnectionLineComponentProps,
   type EdgeProps as RFEdgeProps,
   type Position,
@@ -93,6 +94,52 @@ export const CustomConnectionLine = ({
         fill: "none",
       }}
     />
+  );
+};
+
+export interface DragHandleProps {
+  point: xy.XY;
+  dir: direction.Direction;
+  index: number;
+  onDragStart: (e: DragEvent) => void;
+}
+
+export const DragHandle = ({
+  point: p,
+  dir,
+  index,
+  onDragStart,
+}: DragHandleProps): ReactElement => {
+  const swapped = direction.swap(dir);
+  const dims = {
+    [direction.dimension(dir)]: "18px",
+    [direction.dimension(swapped)]: "4px",
+  };
+  const pos = {
+    [dir]: p[dir] - 9,
+    [swapped]: p[swapped] - 2,
+  };
+
+  return (
+    <>
+      <rect
+        className={CSS.BE("diagram-edge-handle", "background")}
+        fill="var(--pluto-gray-l0)"
+        stroke="var(--pluto-primary-z)"
+        {...dims}
+        {...pos}
+        rx="2px"
+        ry="2px"
+      />
+      <foreignObject x={p.x - 9} y={p.y - 9} width="18px" height="18px">
+        <div
+          id={`handle-${index}`}
+          className={CSS(CSS.BE("diagram-edge-handle", "dragger"), CSS.dir(dir))}
+          draggable
+          onDragStart={onDragStart}
+        />
+      </foreignObject>
+    </>
   );
 };
 
@@ -233,44 +280,21 @@ export const Edge = ({
 
   return (
     <>
-      <P points={points} color={color} />
+      {/* add two circles at the endpoints */}
+      {/* <circle cx={sourcePos.x} cy={sourcePos.y} r={4} fill="red" />
+      <circle cx={targetPos.x} cy={targetPos.y} r={4} fill="red" /> */}
+      <P points={points} color={"#0000010"} />
       {selected &&
-        calcMidPoints(points).map((p, i) => {
-          const dir = segments[i].direction;
-          const swapped = direction.swap(dir);
-          const dims = {
-            [direction.dimension(dir)]: "18px",
-            [direction.dimension(swapped)]: "4px",
-          };
-          const pos = {
-            [dir]: p[dir] - 9,
-            [swapped]: p[swapped] - 2,
-          };
-          return (
-            <Fragment key={i}>
-              <rect
-                className={CSS.BE("diagram-edge-handle", "background")}
-                fill="var(--pluto-gray-l0)"
-                stroke="var(--pluto-primary-z)"
-                {...dims}
-                {...pos}
-                rx="2px"
-                ry="2px"
-              />
-              <foreignObject x={p.x - 9} y={p.y - 9} width="18px" height="18px">
-                <div
-                  id={`handle-${i}`}
-                  className={CSS(
-                    CSS.BE("diagram-edge-handle", "dragger"),
-                    CSS.dir(dir),
-                  )}
-                  draggable
-                  onDragStart={dragStart}
-                />
-              </foreignObject>
-            </Fragment>
-          );
-        })}
+        calcMidPoints(points).map((p, i) => (
+          <Fragment key={i}>
+            <DragHandle
+              point={p}
+              dir={segments[i].direction}
+              index={i}
+              onDragStart={dragStart}
+            />
+          </Fragment>
+        ))}
     </>
   );
 };

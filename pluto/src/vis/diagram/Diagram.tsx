@@ -279,6 +279,7 @@ const Core = Aether.wrap<DiagramProps>(
         viewportRef.current = vp;
         if (isNaN(vp.x) || isNaN(vp.y) || isNaN(vp.zoom)) return;
         setState((prev) => ({ ...prev, position: vp, zoom: vp.zoom }));
+        console.log(vp);
         onViewportChange(translateViewportBackward(vp));
       },
       [setState, onViewportChange],
@@ -438,6 +439,8 @@ const Core = Aether.wrap<DiagramProps>(
       [editable, visible, onEditableChange, registerNodeRenderer, fitViewOnResize],
     );
 
+    console.log(viewport);
+
     return (
       <Context.Provider value={ctxValue}>
         <Aether.Composite path={path}>
@@ -468,7 +471,6 @@ const Core = Aether.wrap<DiagramProps>(
               proOptions={PRO_OPTIONS}
               deleteKeyCode={DELETE_KEY_CODES}
               {...props}
-              style={{ [CSS.var("diagram-zoom")]: viewport.zoom, ...props.style }}
               {...editableProps}
               nodesDraggable={editable && !adjustable.held}
             >

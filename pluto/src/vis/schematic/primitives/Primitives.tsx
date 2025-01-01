@@ -194,11 +194,11 @@ const Handle = ({
       type="source"
       onClick={(e) => e.stopPropagation()}
       className={(CSS.B("handle"), CSS.BE("handle", props.id))}
-      style={{
-        left: `${adjusted.left}%`,
-        top: `${adjusted.top}%`,
-        ...style,
-      }}
+      // style={{
+      //   left: `${adjusted.left}%`,
+      //   top: `${adjusted.top}%`,
+      //   ...style,
+      // }}
     />
   );
 };
@@ -1550,8 +1550,8 @@ export const Value = ({
       <HandleBoundary orientation={orientation}>
         <Handle location="left" orientation="left" left={0} top={50} id="1" />
         <Handle location="right" orientation="left" left={100} top={50} id="2" />
-        <Handle location="top" orientation="left" left={50} top={-2} id="3" />
-        <Handle location="bottom" orientation="left" left={50} top={102} id="4" />
+        <Handle location="top" orientation="left" left={50} top={0} id="3" />
+        <Handle location="bottom" orientation="left" left={50} top={100} id="4" />
       </HandleBoundary>
       <div
         className={CSS(CSS.BE("value", "units"), CSS.M(unitsLevel))}

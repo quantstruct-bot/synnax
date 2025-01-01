@@ -13,13 +13,9 @@
     width: fit-content;
     height: fit-content;
 
-    .react-flow__handle {
-        scale: calc(1 / var(--pluto-diagram-zoom, 1));
-        transform: translate(
-            calc(var(--pluto-diagram-zoom, 1) * -50%),
-            calc(var(--pluto-diagram-zoom, 1) * -50%)
-        );
-    }
+    /* .react-flow__handle {
+        transform: translate(-50%, -50%);
+    } */
 
     & svg {
         stroke-width: 2px;
