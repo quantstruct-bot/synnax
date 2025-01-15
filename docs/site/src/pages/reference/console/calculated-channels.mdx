@@ -1,0 +1,101 @@
+---
+layout: "@/layouts/Reference.astro"
+title: "Calculated Channels"
+description: "Process telemetry real-time with Calculated Channels"
+prev: "Channels"
+prevURL: "/reference/console/channels"
+next: "Workspaces"
+nextURL: "reference/console/workspaces"
+---
+
+import { Divider, Note } from "@synnaxlabs/pluto";
+import { Video, Image } from "@/components/Media";
+import Diagram from "@/components/Diagram.astro";
+import Table from "@/components/Table.astro";
+import { mdxOverrides } from "@/components/mdxOverrides";
+export const components = mdxOverrides;
+
+Calculated channels are used to analyze or transform real-time data from
+existing [channels](/reference/console/channels). They can be used for a wide variety of
+real-time data processing and analysis such as:
+
+- scaling, converting or filtering raw data
+- implementing sensor voting algorithms
+- creating channels to conditionally trigger alarms/warnings
+
+and much more.
+
+
+## Creating Channels
+
+You can create a channel using the "Create Calculated Channel" command in the Command Palette. To
+open the palette, click on the search bar at the top and type ">". You can also open the
+palette by pressing `Ctrl+Shift+P` (Windows) / `Cmd+Shift+P` (MacOS).
+
+{/*  TODO: video of opening calculated channel from command palette */}
+
+## Calculated Channel Creation
+
+### Parameters
+
+When creating a calculated channel, you will be prompted to fill in the following fields.
+
+<Table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Name</td>
+      <td>
+        A name for the channel.
+      </td>
+    </tr>
+    <tr>
+      <td>Data Type</td>
+      <td>
+        What data type the channel stores.
+      </td>
+    </tr>
+    <tr>
+      <td>Expression</td>
+       <td>
+        The resulting python expression that represents the value written to the calculated channel. The
+        the value written to the channel must be assigned to the `result` variable.
+       </td>
+    </tr>
+    <tr>
+      <td> Requires </td>
+      <td>
+        The existing channels necessary involved in the calculation expressed in the expression. A calculated channel must
+        use **at least one channel**.
+      </td>
+    </tr>
+  </tbody>
+</Table>
+
+Calculated channels are [Virtual](/reference/concepts/channels#virtual-channels), meaning data written to them will not be stored permenantly.
+### Rules for Calculations
+
+#### Expressions are written in Python.
+
+The calculations are specified as python expressions on existing channels in synnax. Expressions must be valid for
+ **Python 3.11.7** and **Numpy 1.24.3**.
+
+Expressions may contain several variable declarations and intermediate operations, but the final output to the channel
+must be assigned to `result`. Below is an example of a calculated channel scaling and averaging 3 pressure readings.
+
+#### Channels with hyphenated names are accessed with builtin `channels` dictionary
+
+To perform operations on channels whose names contains hyphens, they must be accessed through the `channels` dictionary like so:
+
+{/* TODO: Photo of a calc channel window with hyphented channel in expression*/}
+
+## Editing Calculations
+
+You can edit an existing calculated channel by right clicking on it in the resource toolbar and selecting "Edit Calculation" from the menu.
+
+{/*  TODO: video of editing a calculation */}
