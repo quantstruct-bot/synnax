@@ -7,7 +7,7 @@
 // License, use of this software will be governed by the Apache License, Version 2.0,
 // included in the file licenses/APL.txt.
 
-import { ontology, type Synnax as Client } from "@synnaxlabs/client";
+import { type ontology, ranger, type Synnax as Client } from "@synnaxlabs/client";
 import { Icon } from "@synnaxlabs/media";
 import {
   Align,
@@ -23,7 +23,6 @@ import { type FC, type ReactElement, useState } from "react";
 import { Task } from "@/hardware/task";
 import { Layout } from "@/layout";
 import { create } from "@/schematic/external";
-import { type State as SchematicState } from "@/schematic/slice";
 
 interface SnapshotService {
   icon: ReactElement<PIcon.BaseProps>;
@@ -36,14 +35,7 @@ const SNAPSHOTS: Record<"schematic" | "task", SnapshotService> = {
     onClick: (client, res, place) => {
       void (async () => {
         const s = await client.workspaces.schematic.retrieve(res.id.key);
-        place(
-          create({
-            ...(s.data as unknown as SchematicState),
-            key: s.key,
-            name: s.name,
-            snapshot: s.snapshot,
-          }),
-        );
+        place(create({ ...s.data, key: s.key, name: s.name, snapshot: s.snapshot }));
       })();
     },
   },
@@ -96,7 +88,7 @@ export const Snapshots: FC<SnapshotsProps> = ({ rangeKey }) => {
 
   useAsyncEffect(async () => {
     if (client == null) return;
-    const otgID = new ontology.ID({ type: "range", key: rangeKey });
+    const otgID = ranger.ontologyID(rangeKey);
     const children = await client.ontology.retrieveChildren(otgID);
     const relevant = children.filter((child) => child.data?.snapshot === true);
     setSnapshots(relevant);

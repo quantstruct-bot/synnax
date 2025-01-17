@@ -16,6 +16,7 @@ import { readTextFile } from "@tauri-apps/plugin-fs";
 import { useStore } from "react-redux";
 
 import { type FileIngestor } from "@/import/ingestor";
+import { trimFileName } from "@/import/trimFileName";
 import { Layout } from "@/layout";
 import { type RootState } from "@/store";
 import { Workspace } from "@/workspace";
@@ -58,18 +59,16 @@ export const createImporter: ImporterCreator =
       }
       store.dispatch(Workspace.add(ws));
       store.dispatch(
-        Layout.setWorkspace({
-          slice: ws.layout as unknown as Layout.SliceState,
-          keepNav: false,
-        }),
+        Layout.setWorkspace({ slice: ws.layout as Layout.SliceState, keepNav: false }),
       );
     }
     await Promise.allSettled(
       paths.map(async (path) => {
         try {
           const data = await readTextFile(path);
-          const name = path.split(sep()).pop();
+          let name = path.split(sep()).pop();
           if (name == null) throw new Error(`Cannot read file located at ${path}`);
+          name = trimFileName(name);
           ingest(data, { layout: { name }, placeLayout, store });
         } catch (e) {
           handleException(e, `Failed to import ${type} at ${path}`);

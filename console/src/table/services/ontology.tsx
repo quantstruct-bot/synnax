@@ -7,7 +7,7 @@
 // License, use of this software will be governed by the Apache License, Version 2.0,
 // included in the file licenses/APL.txt.
 
-import { ontology, type Synnax } from "@synnaxlabs/client";
+import { ontology, type Synnax, table } from "@synnaxlabs/client";
 import { Icon } from "@synnaxlabs/media";
 import { Menu as PMenu, Mosaic, Tree } from "@synnaxlabs/pluto";
 import { errors } from "@synnaxlabs/x";
@@ -60,12 +60,14 @@ const TreeContextMenu: Ontology.TreeContextMenu = (props) => {
   const del = useDelete();
   const handleLink = Link.useCopyToClipboard();
   const handleExport = Table.useExport();
+  const group = Group.useCreateFromSelection();
   const onSelect = useAsyncActionMenu({
     delete: () => del(props),
     rename: () => Tree.startRenaming(resources[0].key),
     link: () =>
       handleLink({ name: resources[0].name, ontologyID: resources[0].id.payload }),
     export: () => handleExport(resources[0].id.key),
+    group: () => group(props),
   });
   const isSingle = resources.length === 1;
   return (
@@ -100,13 +102,7 @@ const loadTable = async (
   placeLayout: Layout.Placer,
 ) => {
   const table = await client.workspaces.table.retrieve(id.key);
-  placeLayout(
-    Table.create({
-      ...(table.data as unknown as Table.State),
-      key: table.key,
-      name: table.name,
-    }),
-  );
+  placeLayout(Table.create({ ...table.data, key: table.key, name: table.name }));
 };
 
 const handleSelect: Ontology.HandleSelect = async ({
@@ -129,7 +125,7 @@ const handleMosaicDrop: Ontology.HandleMosaicDrop = ({
       placeLayout(
         Table.create({
           name: table.name,
-          ...(table.data as unknown as Table.State),
+          ...table.data,
           key: id.key,
           location: "mosaic",
           tab: { mosaicKey: nodeKey, location },
@@ -142,7 +138,7 @@ const handleMosaicDrop: Ontology.HandleMosaicDrop = ({
 };
 
 export const ONTOLOGY_SERVICE: Ontology.Service = {
-  type: "table",
+  type: table.ONTOLOGY_TYPE,
   icon: <Icon.Table />,
   hasChildren: false,
   haulItems: (r) => [{ type: Mosaic.HAUL_CREATE_TYPE, key: r.id.toString() }],

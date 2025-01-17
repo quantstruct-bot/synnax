@@ -7,7 +7,7 @@
 // License, use of this software will be governed by the Apache License, Version 2.0,
 // included in the file licenses/APL.txt.
 
-import { ontology, type Synnax } from "@synnaxlabs/client";
+import { log, ontology, type Synnax } from "@synnaxlabs/client";
 import { Icon } from "@synnaxlabs/media";
 import { Menu as PMenu, Mosaic, Tree } from "@synnaxlabs/pluto";
 import { errors } from "@synnaxlabs/x";
@@ -60,12 +60,14 @@ const TreeContextMenu: Ontology.TreeContextMenu = (props) => {
   const del = useDelete();
   const handleLink = Link.useCopyToClipboard();
   const handleExport = Log.useExport();
+  const group = Group.useCreateFromSelection();
   const onSelect = useAsyncActionMenu({
     delete: () => del(props),
     rename: () => Tree.startRenaming(resources[0].key),
     link: () =>
       handleLink({ name: resources[0].name, ontologyID: resources[0].id.payload }),
     export: () => handleExport(resources[0].id.key),
+    group: () => group(props),
   });
   const isSingle = resources.length === 1;
   return (
@@ -96,13 +98,7 @@ const handleRename: Ontology.HandleTreeRename = {
 
 const loadLog = async (client: Synnax, id: ontology.ID, placeLayout: Layout.Placer) => {
   const log = await client.workspaces.log.retrieve(id.key);
-  placeLayout(
-    Log.create({
-      ...(log.data as unknown as Log.State),
-      key: log.key,
-      name: log.name,
-    }),
-  );
+  placeLayout(Log.create({ ...(log.data as Log.State), key: log.key, name: log.name }));
 };
 
 const handleSelect: Ontology.HandleSelect = async ({
@@ -125,7 +121,7 @@ const handleMosaicDrop: Ontology.HandleMosaicDrop = ({
       placeLayout(
         Log.create({
           name: log.name,
-          ...(log.data as unknown as Log.State),
+          ...log.data,
           key: id.key,
           location: "mosaic",
           tab: { mosaicKey: nodeKey, location },
@@ -138,7 +134,7 @@ const handleMosaicDrop: Ontology.HandleMosaicDrop = ({
 };
 
 export const ONTOLOGY_SERVICE: Ontology.Service = {
-  type: "log",
+  type: log.ONTOLOGY_TYPE,
   icon: <Icon.Log />,
   hasChildren: false,
   haulItems: (r) => [{ type: Mosaic.HAUL_CREATE_TYPE, key: r.id.toString() }],
