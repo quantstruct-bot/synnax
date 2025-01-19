@@ -198,7 +198,6 @@ const Wrapped = ({
   });
 
   const startOrStop = useMutation({
-    mutationKey: [client?.key, "start"],
     mutationFn: async () => {
       if (client == null) return;
       const isRunning = running === true;
@@ -208,7 +207,6 @@ const Wrapped = ({
   });
 
   const handleTare = useMutation({
-    mutationKey: [client?.key],
     onError: (e) => handleException(e, "Failed to tare channels"),
     mutationFn: async (keys: number[]) => {
       if (client == null) return;
@@ -515,7 +513,7 @@ const ChannelListItem = ({
         {showTareButton && (
           <TareButton
             disabled={tareIsDisabled}
-            onClick={() => onTare(childValues.channel as number)}
+            onClick={() => onTare(childValues.channel)}
           />
         )}
         <EnableDisableButton
