@@ -107,6 +107,7 @@ export const TelemForm = ({ path }: TelemFormProps): ReactElement => {
             onChange={handleRollingAverageChange}
           />
         </Input.Item>
+        <Form.NumericField path="max" hideIfNull label="Max" />
       </Align.Space>
     </>
   );

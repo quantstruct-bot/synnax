@@ -32,6 +32,7 @@ const gaugeState = z.object({
   notation: notationZ.optional().default("standard"),
   location: location.xy.optional().default({ x: "left", y: "center" }),
   units: z.string().optional().default("RPM"),
+  max: z.number().optional().default(100),
 });
 
 const CANVAS_VARIANTS: render.Canvas2DVariant[] = ["upper2d", "lower2d"];
@@ -132,7 +133,10 @@ export class Gauge
       fill: this.internal.theme.colors.visualization.palettes.default[0],
       radius: { lower: baseRadius - 12, upper: baseRadius },
       position: box.center(b),
-      angle: { lower: 1 * Math.PI, upper: (1 + Number(value) / 10) * Math.PI },
+      angle: {
+        lower: 1 * Math.PI,
+        upper: (1 + (Number(value) / this.state.max) * 2) * Math.PI,
+      },
     });
   }
 }

@@ -125,6 +125,8 @@ import {
   type FourWayValveProps,
   GateValve,
   type GateValveProps,
+  Gauge,
+  type GaugeProps,
   HeatExchangerGeneral,
   type HeatExchangerGeneralProps,
   HeatExchangerM,
@@ -292,6 +294,7 @@ const VARIANTS = [
   "threeWayValve",
   "vacuumPump",
   "value",
+  "gauge",
   "valve",
   "vent",
   "tJunction",
@@ -646,10 +649,11 @@ const reliefValve: Spec<ReliefValveProps> = {
   Symbol: ReliefValve,
   defaultProps: (t) => ({
     color: t.colors.gray.l9.rgba255,
+    on: true,
     ...zeroLabel("Relief Valve"),
     ...ZERO_DUMMY_TOGGLE_PROPS,
   }),
-  Preview: removeProps(Primitives.ReliefValve, ["clickable"]),
+  Preview: removeProps(Primitives.AngledReliefValve, ["clickable"]),
   zIndex: Z_INDEX_UPPER,
 };
 
@@ -845,7 +849,7 @@ const checkValve: Spec<CheckValveProps> = {
     ...zeroLabel("Check Valve"),
     ...ZERO_PROPS,
   }),
-  Preview: Primitives.CheckValve,
+  Preview: Primitives.NeedleValve,
   zIndex: Z_INDEX_UPPER,
 };
 
@@ -870,6 +874,7 @@ const angledReliefValve: Spec<ReliefValveProps> = {
   Symbol: AngledReliefValve,
   defaultProps: (t) => ({
     color: t.colors.gray.l9.rgba255,
+    on: true,
     ...zeroLabel("Angled Relief Valve"),
     ...ZERO_DUMMY_TOGGLE_PROPS,
   }),
@@ -890,6 +895,25 @@ const value: Spec<ValueProps> = {
     inlineSize: 70,
     ...zeroLabel("Value"),
     ...ZERO_PROPS,
+    telem: ZERO_NUMERIC_STRINGER_SOURCE_PROPS.source,
+  }),
+  zIndex: Z_INDEX_UPPER,
+};
+
+const gauge: Spec<GaugeProps> = {
+  name: "Gauge",
+  key: "gauge",
+  Form: ValueForm,
+  Symbol: Gauge,
+  Preview: ValuePreview,
+  defaultProps: (t) => ({
+    color: t.colors.gray.l9.rgba255,
+    units: "psi",
+    level: "h5",
+    inlineSize: 70,
+    ...zeroLabel("Gauge"),
+    ...ZERO_PROPS,
+    max: 100,
     telem: ZERO_NUMERIC_STRINGER_SOURCE_PROPS.source,
   }),
   zIndex: Z_INDEX_UPPER,
@@ -1683,6 +1707,7 @@ export const SYMBOLS: Record<Variant, Spec<any>> = {
   helicalAgitator,
   isoCheckValve,
   vent,
+  gauge,
   cylinder,
   flowmeterGeneral,
   flowmeterElectromagnetic,

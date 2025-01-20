@@ -9,6 +9,23 @@
  * included in the file licenses/APL.txt.
  */
 
+/* @keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.pluto-relief-valve-path {
+    transition: transform 0.3s ease;
+}
+
+.pluto--rotating {
+    animation: rotate 2s linear infinite; */
+/* } */
+
 .pluto-symbol-primitive {
     width: fit-content;
     height: fit-content;

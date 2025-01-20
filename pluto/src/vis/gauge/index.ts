@@ -1,1 +1,1 @@
-export * as Gauge from "@/vis/gauge/Gauge";
+export * as Gauge from "@/vis/gauge/external";

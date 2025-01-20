@@ -16,6 +16,7 @@ import {
   toArray,
   xy,
 } from "@synnaxlabs/x";
+import { type bounds } from "@synnaxlabs/x";
 
 import { color } from "@/color/core";
 import { type text } from "@/text/core";
@@ -40,8 +41,9 @@ export interface Draw2DRuleProps extends Omit<Draw2DLineProps, "start" | "end"> 
 
 export interface Draw2DCircleProps {
   fill: color.Color;
-  radius: number;
+  radius: number | bounds.Bounds;
   position: xy.XY;
+  angle?: number | bounds.Bounds;
 }
 
 export interface Draw2DContainerProps {
@@ -62,6 +64,8 @@ export interface DrawTextProps {
   shade?: text.Shade;
   maxWidth?: number;
   code?: boolean;
+  baseline?: "top" | "middle" | "bottom";
+  align?: "left" | "center" | "right";
 }
 
 export interface DrawTextInCenterProps
@@ -128,11 +132,22 @@ export class Draw2D {
     ctx.stroke();
   }
 
-  circle({ fill, radius, position }: Draw2DCircleProps): void {
+  circle({ fill, radius, position, angle = 2 * Math.PI }: Draw2DCircleProps): void {
     const ctx = this.canvas;
     ctx.fillStyle = fill.hex;
     ctx.beginPath();
-    ctx.arc(...xy.couple(position), radius, 0, 2 * Math.PI);
+
+    const startAngle = typeof angle === "number" ? 0 : angle.lower;
+    const endAngle = typeof angle === "number" ? angle : angle.upper;
+
+    if (typeof radius === "number")
+      ctx.arc(...xy.couple(position), radius, startAngle, endAngle);
+    else {
+      ctx.arc(...xy.couple(position), radius.upper, startAngle, endAngle);
+      ctx.arc(...xy.couple(position), radius.lower, endAngle, startAngle, true);
+      ctx.closePath();
+    }
+
     ctx.fill();
   }
 
@@ -272,11 +287,14 @@ export class Draw2D {
     shade,
     maxWidth,
     code,
+    align = "left",
+    baseline = "top",
   }: DrawTextProps): void {
     this.canvas.font = fontString(this.theme, { level, weight, code });
     if (shade == null) this.canvas.fillStyle = this.theme.colors.text.hex;
     else this.canvas.fillStyle = this.theme.colors.gray[`l${shade}`].hex;
-    this.canvas.textBaseline = "top";
+    this.canvas.textAlign = align;
+    this.canvas.textBaseline = baseline;
     let removeScissor: Destructor | undefined;
     if (maxWidth != null)
       removeScissor = this.canvas.scissor(box.construct(position, maxWidth, 1000));

@@ -124,7 +124,6 @@ export const LinePlot = ({
   onLineChange,
   onRuleChange,
   onAxisChannelDrop,
-  onAxisChange,
   rules,
   enableTooltip = true,
   enableMeasure = false,
@@ -136,6 +135,7 @@ export const LinePlot = ({
   onSelectRule,
   ...props
 }: LinePlotProps): ReactElement => {
+  const onAxisChange = () => {};
   const xAxes = axes.filter(({ location: l }) => loc.isY(l));
   const ref = useRef<Viewport.UseRefValue | null>(null);
   const prevLinesLength = usePrevious(lines.length);

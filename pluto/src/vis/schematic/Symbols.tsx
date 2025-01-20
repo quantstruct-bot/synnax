@@ -19,6 +19,7 @@ import { Control } from "@/telem/control";
 import { Text } from "@/text";
 import { Theming } from "@/theming";
 import { Button as CoreButton } from "@/vis/button";
+import { Gauge as CoreGauge } from "@/vis/gauge";
 import { Light as CoreLight } from "@/vis/light";
 import { Grid, type GridItem } from "@/vis/schematic/Grid";
 import { Primitives } from "@/vis/schematic/primitives";
@@ -679,6 +680,50 @@ export const ValuePreview = ({ color }: ValueProps): ReactElement => (
     <Text.Text level="p">50.00</Text.Text>
   </Primitives.Value>
 );
+
+export interface GaugeProps
+  extends Omit<CoreGauge.UseProps, "aetherKey" | "box">,
+    Omit<Primitives.GaugeProps, "dims"> {
+  label?: LabelExtensionProps;
+  selected?: boolean;
+  draggable?: boolean;
+}
+
+export const Gauge = ({
+  symbolKey,
+  label,
+  onChange,
+  selected,
+  draggable,
+  max,
+  units,
+  position,
+  ...props
+}: SymbolProps<GaugeProps>): ReactElement => {
+  const b = box.construct(xy.translateY({ ...position }, 1), {
+    height: 180,
+    width: 180,
+  });
+  CoreGauge.use({ ...props, aetherKey: symbolKey, box: b, units, max });
+  const gridItems: GridItem[] = [];
+  const labelItem = labelGridItem(label, onChange);
+  if (labelItem != null) gridItems.push(labelItem);
+  return (
+    <Grid
+      editable={selected && !draggable}
+      symbolKey={symbolKey}
+      items={gridItems}
+      onLocationChange={(key, loc) => {
+        if (key !== "label") return;
+        onChange({ label: { ...label, orientation: loc } } as Partial<GaugeProps>);
+      }}
+    >
+      <Primitives.Gauge {...props} dims={box.dims(b)} />
+    </Grid>
+  );
+};
+
+export const GaugePreview = ValuePreview;
 
 export interface ButtonProps
   extends Omit<Primitives.ButtonProps, "label" | "onClick">,
