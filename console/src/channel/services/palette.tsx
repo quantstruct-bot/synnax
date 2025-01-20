@@ -30,7 +30,6 @@ const CREATE_CALCULATED_CMD: Command = {
   onSelect: ({ placeLayout }: CommandSelectionContext) => {
     placeLayout(createCalculatedLayout);
   },
-  actions: [<Version.BetaTag key="beta-tag" />],
 };
 
 export const COMMANDS = [CREATE_CMD, CREATE_CALCULATED_CMD];

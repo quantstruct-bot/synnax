@@ -218,7 +218,6 @@ const Internal = ({ onClose, initialValues }: InternalProps): ReactElement => {
             </Align.Space>
           )}
           <Align.Space direction="x" align="center">
-            <Version.BetaTag feature="Calculated channels" plural />
             <Button.Button
               disabled={isPending}
               loading={isPending}

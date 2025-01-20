@@ -29,19 +29,18 @@ IGNITION_STATE = "ignition_state"
 # Sensor channels
 FUEL_RES_PT = "fuel_res_pt"
 AIR_SUPPLY_PT = "air_supply_pt"
-FAN_SPEED = "fan_speed"
 OIL_PT = "oil_pt"
-COMPRESSOR_SPEED = "compressor_speed"
 AMBIENT_PT = "ambient_pt"
 AMBIENT_TC = "ambient_tc"
 FAN_INLET_TC = "fan_inlet_tc"
 COMPRESSOR_INLET_TC = "compressor_inlet_tc"
 COMPRESSOR_INLET_PT = "compressor_inlet_pt"
-COMPRESSOR_SHAFT_SPEED = "compressor_shaft_speed"
 FLAME = "flame"
 COMBUSTION_PT = "combustion_pt"
-COMBUSTION_TC = "combustion_tc"
+COMBUSTION_TC_1 = "combustion_tc_1"
+COMBUSTION_TC_2 = "combustion_tc_2"
 EXHAUST_TC = "exhaust_tc"
+EXHAUST_FLOW = "exhaust_flow"
 FUEL_TC = "fuel_tc"
 FUEL_PT = "fuel_pt"
 FUEL_FLOW = "fuel_flow"
@@ -72,20 +71,19 @@ VALVES = {
 SENSORS = [
     FUEL_RES_PT,
     AIR_SUPPLY_PT,
-    FAN_SPEED,
     OIL_PT,
-    COMPRESSOR_SPEED,
     AMBIENT_PT,
     AMBIENT_TC,
     FAN_INLET_TC,
     COMPRESSOR_INLET_TC,
     COMPRESSOR_INLET_PT,
-    COMPRESSOR_SHAFT_SPEED,
     FLAME,
     COMBUSTION_PT,
-    COMBUSTION_TC,
+    COMBUSTION_TC_1,
+    COMBUSTION_TC_2,
     EXHAUST_TC,
     FUEL_TC,
+    EXHAUST_FLOW,
     FUEL_PT,
     FUEL_FLOW,
     OIL_TC,

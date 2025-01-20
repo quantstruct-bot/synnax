@@ -18,6 +18,9 @@ from common import (
     FUEL_VALVE_1_STATE,
     FUEL_VALVE_2_STATE,
     FUEL_RES_VALVE_1_STATE,
+    AMBIENT_PT,
+    AMBIENT_TC,
+    OIL_PT,
     FUEL_RES_VALVE_2_STATE,
     AIR_VALVE_1_STATE,
     AIR_VALVE_2_STATE,
@@ -27,17 +30,12 @@ from common import (
     IGNITION_STATE,
     FUEL_RES_PT,
     AIR_SUPPLY_PT,
-    FAN_SPEED,
-    OIL_PT,
-    COMPRESSOR_SPEED,
-    AMBIENT_PT,
-    AMBIENT_TC,
     FAN_INLET_TC,
     COMPRESSOR_INLET_TC,
     COMPRESSOR_INLET_PT,
-    COMPRESSOR_SHAFT_SPEED,
     COMBUSTION_PT,
-    COMBUSTION_TC,
+    COMBUSTION_TC_1,
+    COMBUSTION_TC_2,
     EXHAUST_TC,
     FUEL_TC,
     FUEL_PT,
@@ -49,6 +47,7 @@ from common import (
     THRUST,
     N1_SPEED,
     N2_SPEED,
+    EXHAUST_FLOW,
 )
 
 import numpy as np
@@ -112,18 +111,15 @@ DAQ_STATE = {
     # Sensor initial values
     FUEL_RES_PT: 0,
     AIR_SUPPLY_PT: 0,
-    FAN_SPEED: 0,
-    OIL_PT: 0,
-    COMPRESSOR_SPEED: 0,
     AMBIENT_PT: 14.7,  # Standard atmospheric pressure
     AMBIENT_TC: 25,    # Room temperature
     FAN_INLET_TC: 25,
     COMPRESSOR_INLET_TC: 25,
     COMPRESSOR_INLET_PT: 14.7,
-    COMPRESSOR_SHAFT_SPEED: 0,
     FLAME: 0,
     COMBUSTION_PT: 14.7,
-    COMBUSTION_TC: 25,
+    COMBUSTION_TC_1: 25,
+    COMBUSTION_TC_2: 25,
     EXHAUST_TC: 25,
     FUEL_TC: 25,
     FUEL_PT: 0,
@@ -136,13 +132,14 @@ DAQ_STATE = {
     THRUST: 0,
     N1_SPEED: 0,
     N2_SPEED: 0,
+    EXHAUST_FLOW: 0,
 }
 
 # Simulation constants
-IDLE_N1_SPEED = 20000.0   # RPM - Increased from 2000
-MAX_N1_SPEED = 25000.0    # RPM - Increased from 5000
-IDLE_N2_SPEED = 45000.0   # RPM - Increased from 10000
-MAX_N2_SPEED = 55000.0    # RPM - Increased from 15000
+IDLE_N1_SPEED = 10000.0    # RPM - Reduced from 20000
+MAX_N1_SPEED = 15000.0     # RPM - Reduced from 25000
+IDLE_N2_SPEED = 20000.0   # RPM - Reduced from 45000
+MAX_N2_SPEED = 30000.0    # RPM - Reduced from 55000
 MAX_THRUST = 1000.0      # lbf
 AMBIENT_TEMP = 25.0     # Celsius
 AMBIENT_PRESS = 14.7    # PSI
@@ -151,16 +148,16 @@ def update_sensors_starting(state):
     """Update sensor values during engine start"""
     if state[STARTER_MOTOR_STATE]:
         # N1 (fan) spool-up to ~15% of max for light-off
-        target_n1 = MAX_N1_SPEED * 0.15
+        target_n1 = MAX_N1_SPEED * 0.2
         current_n1 = state[N1_SPEED]
         if current_n1 < target_n1:
-            state[N1_SPEED] = min(current_n1 + 800.0, target_n1)
+            state[N1_SPEED] = min(current_n1 + 1.0, target_n1)
             
         # N2 (core) spools up faster and to a higher speed
-        target_n2 = MAX_N2_SPEED * 0.15
+        target_n2 = MAX_N2_SPEED * 0.17
         current_n2 = state[N2_SPEED]
         if current_n2 < target_n2:
-            state[N2_SPEED] = min(current_n2 + 2000.0, target_n2)
+            state[N2_SPEED] = min(current_n2 + 25.0, target_n2)
             
         # Check for ignition conditions
         if not state[FLAME]:  # Only check if not already lit
@@ -182,13 +179,23 @@ def update_sensors_starting(state):
             else:
                 state[FLAME] = 1.0
                 print("All conditions met - flame lit!")
+                state[STARTER_MOTOR_STATE] = False
             
-        # Update dependent parameters
-        state[COMPRESSOR_SPEED] = state[N2_SPEED]
-        state[FAN_SPEED] = state[N1_SPEED]
-        
         # Starter motor current increases with speed
         state[STARTER_MOTOR_CURRENT] = 10.0 * (state[N1_SPEED] / target_n1)
+        
+        # Update flow rates during startup
+        if state[FUEL_PUMP_STATE] and state[FUEL_VALVE_1_STATE]:
+            target_fuel_flow = 50.0 * (state[N2_SPEED] / (MAX_N2_SPEED * 0.17))  # lb/hr
+            state[FUEL_FLOW] = min(state[FUEL_FLOW] + 2.0, target_fuel_flow)
+        
+        # Oil flow proportional to N2 speed during start
+        target_oil_flow = 5.0 * (state[N2_SPEED] / (MAX_N2_SPEED * 0.17))  # gal/min
+        state[OIL_FLOW] = min(state[OIL_FLOW] + 0.2, target_oil_flow)
+        
+        # Exhaust flow during startup (primarily from starter-driven airflow)
+        exhaust_flow = state[N2_SPEED] / MAX_N2_SPEED * 100  # lb/s
+        state[EXHAUST_FLOW] = min(state[EXHAUST_FLOW] + 1.0, exhaust_flow)
     
     return state
 
@@ -207,53 +214,78 @@ def update_sensors_running(state):
         target_n1 = IDLE_N1_SPEED
         current_n1 = state[N1_SPEED]
         if current_n1 < target_n1:
-            state[N1_SPEED] = min(current_n1 + 1500.0, target_n1)
+            state[N1_SPEED] = min(current_n1 + 100.0, target_n1)
             
         # N2 accelerates faster than N1
         target_n2 = IDLE_N2_SPEED
         current_n2 = state[N2_SPEED]
         if current_n2 < target_n2:
-            state[N2_SPEED] = min(current_n2 + 3000.0, target_n2)
+            state[N2_SPEED] = min(current_n2 + 200.0, target_n2)
+            
         # Update temperatures based on N2 speed
         n2_ratio = current_n2 / MAX_N2_SPEED
-        state[COMBUSTION_TC] = state[AMBIENT_TC] + (1200 * n2_ratio)
-        state[EXHAUST_TC] = state[COMBUSTION_TC] * 0.9
+        state[COMBUSTION_TC_1] = state[AMBIENT_TC] + (1200 * n2_ratio)
+        state[EXHAUST_TC] = state[COMBUSTION_TC_1] * 0.9
         
         # Update pressures based on N2
         state[COMBUSTION_PT] = state[AMBIENT_PT] * (1 + (4.0 * n2_ratio))
         
         # Update thrust based on both N1 and N2
         state[THRUST] = MAX_THRUST * (n2_ratio * 0.7 + (current_n1 / MAX_N1_SPEED) * 0.3)
+        
+        # Update flow rates during normal operation
+        n2_ratio = state[N2_SPEED] / MAX_N2_SPEED
+        
+        if state[FUEL_PUMP_STATE] and state[FUEL_VALVE_1_STATE]:
+            target_fuel_flow = 800.0 * n2_ratio  # lb/hr at max N2
+            state[FUEL_FLOW] = min(state[FUEL_FLOW] + 5.0, target_fuel_flow)
+        else:
+            state[FUEL_FLOW] = max(0.0, state[FUEL_FLOW] - 10.0)
+        
+        # Oil flow scales with N2 speed
+        target_oil_flow = 15.0 * n2_ratio  # gal/min at max N2
+        state[OIL_FLOW] = min(state[OIL_FLOW] + 0.5, target_oil_flow)
+        
+        # Exhaust flow calculation based on N2 speed and fuel flow
+        # Typical bypass ratio around 5:1 for small turbofan
+        core_flow = 200.0 * n2_ratio  # Core airflow lb/s
+        bypass_flow = core_flow * 5.0  # Bypass airflow lb/s
+        target_exhaust_flow = core_flow + bypass_flow + (state[FUEL_FLOW] / 3600.0)  # Convert fuel flow from lb/hr to lb/s
+        state[EXHAUST_FLOW] = min(state[EXHAUST_FLOW] + 2.0, target_exhaust_flow)
     else:
         # When flame is out, temperatures and pressures should decay much faster
-        state[COMBUSTION_TC] = max(state[AMBIENT_TC], state[COMBUSTION_TC] - 25.0)
+        state[COMBUSTION_TC_1] = max(state[AMBIENT_TC], state[COMBUSTION_TC_1] - 25.0)
         state[EXHAUST_TC] = max(state[AMBIENT_TC], state[EXHAUST_TC] - 20.0)
         state[COMBUSTION_PT] = max(state[AMBIENT_PT], state[COMBUSTION_PT] - 1.0)
         state[N1_SPEED] = max(0.0, state[N1_SPEED] - 500.0)
         state[N2_SPEED] = max(0.0, state[N2_SPEED] - 800.0)
         state[THRUST] = 0.0
-    
-    # Update dependent parameters
-    state[COMPRESSOR_SPEED] = state[N2_SPEED]
-    state[FAN_SPEED] = state[N1_SPEED]
+        state[FUEL_FLOW] = max(0.0, state[FUEL_FLOW] - 10.0)
+        state[OIL_FLOW] = max(0.0, state[OIL_FLOW] - 1.0)
+        state[EXHAUST_FLOW] = max(0.0, state[EXHAUST_FLOW] - 5.0)
     
     return state
 
 def update_sensors_shutdown(state):
     """Update sensor values during shutdown sequence"""
     # Gradually decrease speeds
-    state[N1_SPEED] = max(0.0, state[N1_SPEED] - 500.0)
-    state[N2_SPEED] = max(0.0, state[N2_SPEED] - 800.0)
+    state[N1_SPEED] = max(0.0, state[N1_SPEED] - 200.0)
+    state[N2_SPEED] = max(0.0, state[N2_SPEED] - 400.0)
     
     # Update dependent parameters
-    state[COMPRESSOR_SPEED] = state[N2_SPEED]  # Compressor is on N2 shaft
-    state[FAN_SPEED] = state[N1_SPEED]        # Fan is on N1 shaft
     
     # Update temperatures and pressures
-    state[COMBUSTION_TC] = max(state[AMBIENT_TC], state[COMBUSTION_TC] - 25.0)
-    state[EXHAUST_TC] = max(state[AMBIENT_TC], state[EXHAUST_TC] - 20.0)
-    state[COMBUSTION_PT] = max(state[AMBIENT_PT], state[COMBUSTION_PT] - 1.0)
+    state[COMBUSTION_TC_1] = state[COMBUSTION_TC_1] - (state[COMBUSTION_TC_1] - state[AMBIENT_TC]) * 0.01
+    state[EXHAUST_TC] = state[EXHAUST_TC] - (state[EXHAUST_TC] - state[AMBIENT_TC]) * 0.01
+    state[COMBUSTION_PT] = state[COMBUSTION_PT] - (state[COMBUSTION_PT] - state[AMBIENT_PT]) * 0.01
     state[THRUST] = 0.0
+    
+    # Gradual flow decay during shutdown
+    state[FUEL_FLOW] = max(0.0, state[FUEL_FLOW] - 5.0)
+    state[OIL_FLOW] = max(0.0, state[OIL_FLOW] - 0.5)
+    
+    # Exhaust flow decay during shutdown
+    state[EXHAUST_FLOW] = max(0.0, state[EXHAUST_FLOW] - 3.0)
     
     return state
 
@@ -264,7 +296,7 @@ def introduce_randomness(state: dict) -> dict:
             current = state[sensor]
             # Add 1% random variation to non-zero values
             if current != 0:
-                state[sensor] += current * np.random.normal(0, 0.01)
+                state[sensor] += current * np.random.normal(0, 0.001)
     return state
 
 loop = sy.Loop(sy.Rate.HZ * 30, precise=True)
@@ -305,6 +337,8 @@ with open("data.csv", "w") as f:
                         DAQ_STATE = update_sensors_running(DAQ_STATE)
                     else:
                         DAQ_STATE = update_sensors_shutdown(DAQ_STATE)
+
+                    DAQ_STATE[COMBUSTION_TC_2] = DAQ_STATE[COMBUSTION_TC_1]
                     
                     # Add noise and random variations
                     DAQ_STATE = introduce_randomness(DAQ_STATE)
@@ -315,6 +349,7 @@ with open("data.csv", "w") as f:
                         **{state: DAQ_STATE[state] for state in VALVES.values()},
                         **{sensor: DAQ_STATE[sensor] for sensor in SENSORS}
                     }
+
                     
                     writer.write(write_state)
              

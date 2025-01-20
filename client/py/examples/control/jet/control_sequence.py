@@ -26,7 +26,7 @@ from common import (
     N1_SPEED,
     N2_SPEED,
     FLAME,
-    COMBUSTION_TC,
+    COMBUSTION_TC_1,
     EXHAUST_TC,
 )
 
@@ -37,17 +37,36 @@ class EngineParameters:
     n1_max: float = 5000.0  # RPM
     n2_max: float = 15000.0  # RPM
     max_exhaust_tc: float = 800.0  # Celsius
-    max_combustion_tc: float = 1000.0  # Celsius
+    max_combustion_tc_1: float = 1000.0  # Celsius
     startup_timeout: float = 30.0  # seconds
     cooldown_timeout: float = 60.0  # seconds
 
 client = sy.Synnax()
 
+auto_logs = client.channels.create(
+    name="auto_logs",
+    data_type=sy.DataType.STRING,
+    virtual=True,
+    retrieve_if_name_exists=True,
+)
+
+start_auto_cmd = client.channels.create(
+    name="start_auto_cmd",
+    data_type=sy.DataType.UINT8,
+    virtual=True,
+    retrieve_if_name_exists=True,
+)
+
 def log(aut: Controller, msg: str):
-    print(f"ENGINE {sy.TimeStamp.now().datetime().strftime('%H:%M:%S.%f')}  {msg}")
+    s = f"{sy.TimeStamp.now().datetime().strftime('%H:%M:%S.%f')}  {msg}"
+    aut.set(auto_logs.key, s)
+    print(s)
 
 def execute_startup(aut: Controller, params: EngineParameters) -> bool:
     """Execute engine startup sequence"""
+    log(aut, "Waiting for operator")
+    aut.wait_until(lambda s: s.get(start_auto_cmd.name, 0) == 1)
+
     log(aut, "Starting engine startup sequence")
     
     # Open air valves
@@ -70,10 +89,10 @@ def execute_startup(aut: Controller, params: EngineParameters) -> bool:
     aut[STARTER_MOTOR_CMD] = True
     
     if not aut.wait_until(
-        lambda s: s[N1_SPEED] >= params.n1_idle_target * 0.2,
+        lambda s: s[N2_SPEED] >= params.n2_idle_target * 0.16,
         timeout=params.startup_timeout
     ):
-        log(aut, "N1 failed to reach target speed")
+        log(aut, "N2 failed to reach target speed")
         return False
     
     # Begin ignition sequence
@@ -136,7 +155,7 @@ def execute_shutdown(aut: Controller, params: EngineParameters) -> bool:
     
     # Wait for temperature cooldown
     if not aut.wait_until(
-        lambda s: s[COMBUSTION_TC] <= 100 and s[EXHAUST_TC] <= 100,
+        lambda s: s[COMBUSTION_TC_1] <= 100 and s[EXHAUST_TC] <= 100,
         timeout=params.cooldown_timeout
     ):
         log(aut, "Temperatures remained high")
@@ -161,9 +180,10 @@ def execute_test(params: EngineParameters = EngineParameters()) -> sy.Range:
             FUEL_PUMP_CMD, FUEL_VALVE_1_CMD, FUEL_VALVE_2_CMD,
             FUEL_RES_VALVE_1_CMD, FUEL_RES_VALVE_2_CMD,
             AIR_VALVE_1_CMD, AIR_VALVE_2_CMD, BLEED_VALVE_CMD,
-            SPARK_PLUG_CMD, STARTER_MOTOR_CMD, IGNITION_CMD
+            SPARK_PLUG_CMD, STARTER_MOTOR_CMD, IGNITION_CMD,
+            auto_logs.name,
         ],
-        read=[N1_SPEED, N2_SPEED, FLAME, COMBUSTION_TC, EXHAUST_TC],
+        read=[N1_SPEED, N2_SPEED, FLAME, COMBUSTION_TC_1, EXHAUST_TC, start_auto_cmd.name],
         write_authorities=[250],
     ) as ctrl:
         try:

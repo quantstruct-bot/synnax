@@ -98,27 +98,27 @@ export class TauriRuntime<S extends StoreState, A extends Action = UnknownAction
 
   private async startFullscreenPoll(): Promise<void> {
     if (runtime.getOS() !== "MacOS") return;
-    let prevFullscreen = (await this.getProps()).fullscreen;
-    this.fullscreenPoll = setInterval(() => {
-      this.win
-        .isFullscreen()
-        .then((isFullscreen) => {
-          if (isFullscreen !== prevFullscreen) {
-            prevFullscreen = isFullscreen;
-            this.emit(
-              {
-                action: runtimeSetWindowProps({
-                  label: this.win.label,
-                  fullscreen: isFullscreen,
-                }) as unknown as A,
-              },
-              undefined,
-              "WHITELIST",
-            );
-          }
-        })
-        .catch(console.error);
-    }, MACOS_FULLSCREEN_POLL_INTERVAL.milliseconds);
+    // let prevFullscreen = (await this.getProps()).fullscreen;
+    // this.fullscreenPoll = setInterval(() => {
+    //   this.win
+    //     .isFullscreen()
+    //     .then((isFullscreen) => {
+    //       if (isFullscreen !== prevFullscreen) {
+    //         prevFullscreen = isFullscreen;
+    //         this.emit(
+    //           {
+    //             action: runtimeSetWindowProps({
+    //               label: this.win.label,
+    //               fullscreen: isFullscreen,
+    //             }) as unknown as A,
+    //           },
+    //           undefined,
+    //           "WHITELIST",
+    //         );
+    //       }
+    //     })
+    //     .catch(console.error);
+    // }, MACOS_FULLSCREEN_POLL_INTERVAL.milliseconds);
   }
 
   label(): string {
