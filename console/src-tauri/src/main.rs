@@ -92,22 +92,22 @@ fn main() {
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
-            // #[cfg(target_os = "macos")]
-            // let app_handle = app.handle().clone();
-            // #[cfg(target_os = "macos")]
-            // thread::spawn(move || {
-            //     let app_handle = app_handle.clone();
-            //     let device_state = DeviceState::new();
-            //     let _guard = device_state.on_mouse_up(move |_pos| {
-            //         let state: MouseState = DeviceState::new().get_mouse();
-            //         app_handle
-            //             .emit("mouse_up", state.coords)
-            //             .expect("Failed to emit event");
-            //     });
-            //     loop {
-            //         thread::sleep(Duration::from_secs(1));
-            //     }
-            // });
+            #[cfg(target_os = "macos")]
+            let app_handle = app.handle().clone();
+            #[cfg(target_os = "macos")]
+            thread::spawn(move || {
+                let app_handle = app_handle.clone();
+                let device_state = DeviceState::new();
+                let _guard = device_state.on_mouse_up(move |_pos| {
+                    let state: MouseState = DeviceState::new().get_mouse();
+                    app_handle
+                        .emit("mouse_up", state.coords)
+                        .expect("Failed to emit event");
+                });
+                loop {
+                    thread::sleep(Duration::from_secs(1));
+                }
+            });
             Ok(())
         })
         .run(tauri::generate_context!())
