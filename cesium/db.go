@@ -37,18 +37,36 @@ var (
 	ErrChannelNotFound = core.ErrChannelNotFound
 )
 
+// DB is a cesium database for storing channel-based time series data.
 type DB struct {
 	*options
-	relay      *relay
-	mu         sync.RWMutex
-	unaryDBs   map[ChannelKey]unary.DB
-	virtualDBs map[ChannelKey]virtual.DB
-	digests    struct {
-		key    ChannelKey
-		inlet  confluence.Inlet[WriterRequest]
-		outlet confluence.Outlet[WriterResponse]
+	// relay is used for real-time streaming of written sensor values.
+	relay *relay
+	// mu is the primary database lock. It guards regions of the database that cannot
+	// be accessed or modified concurrently.
+	mu struct {
+		sync.RWMutex
+		// unaryDBs tracks the databases the fixed sample size, unary channels that store
+		// data within a file system.
+		unaryDBs map[ChannelKey]unary.DB
+		// virtualDBs tracks the databases for the virtual channels that are used for
+		// streaming purposes only.
+		virtualDBs map[ChannelKey]virtual.DB
+		// controlDigests is used to manage the lifecycle of the control handoff tracking
+		// mechanism i.e. a writer that communicates control changes to the relay.
+		controlDigests struct {
+			// key is the key of the channel assigned to the control digests.
+			key ChannelKey
+			// inlet is the inlet of the control digests writer.
+			inlet confluence.Inlet[WriterRequest]
+			// outlet is the outlet of the control digests writer.
+			outlet confluence.Outlet[WriterResponse]
+		}
 	}
-	closed   *atomic.Bool
+	// closed marks whether the DB has been closed or not.
+	closed *atomic.Bool
+	// shutdown shuts down database goroutines spawned through internal processes
+	// (e.g. GC).
 	shutdown io.Closer
 }
 
@@ -110,7 +128,7 @@ func (db *DB) Close() error {
 	}
 
 	c := errors.NewCatcher(errors.WithAggregation())
-	// Crucial to close control digests here before closing the signal context so
+	// Crucial to close control controlDigests here before closing the signal context so
 	// writes can still use the signal context to send frames to relay.
 	//
 	// This function acquires the mutex lock internally, so there's no need to lock
@@ -121,7 +139,7 @@ func (db *DB) Close() error {
 	c.Exec(db.shutdown.Close)
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	for _, u := range db.unaryDBs {
+	for _, u := range db.mu.unaryDBs {
 		c.Exec(u.Close)
 	}
 
