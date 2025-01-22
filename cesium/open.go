@@ -50,29 +50,28 @@ func Open(dirname string, opts ...Option) (*DB, error) {
 		shutdown:   signal.NewShutdown(sCtx, cancel),
 	}
 	for _, i := range info {
-		if i.IsDir() {
-			key, err := strconv.Atoi(i.Name())
-			if err != nil {
-				db.options.L.Error(fmt.Sprintf(
-					"failed parsing existing folder <%s> to channel key",
-					i.Name()),
-					zap.Error(err),
-				)
-				continue
-			}
-
-			if err = db.openVirtualOrUnary(Channel{Key: ChannelKey(key)}); err != nil {
-				return nil, err
-			}
-		} else {
+		if !i.IsDir() {
 			db.options.L.Warn(fmt.Sprintf(
 				"Found unknown file %s in database root directory",
 				i.Name(),
 			))
+			continue
+		}
+		key, err := strconv.Atoi(i.Name())
+		if err != nil {
+			db.options.L.Error(fmt.Sprintf(
+				"failed parsing existing folder <%s> to channel key",
+				i.Name()),
+				zap.Error(err),
+			)
+			continue
+		}
+		if err = db.openVirtualOrUnary(Channel{Key: ChannelKey(key)}); err != nil {
+			return nil, err
 		}
 	}
 
-	db.startGC(sCtx, o)
+	db.startGC(sCtx)
 
 	return db, nil
 }
@@ -137,8 +136,7 @@ func (db *DB) openVirtualOrUnary(ch Channel) error {
 	if err != nil {
 		return err
 	}
-	err = db.openVirtual(ch, fs)
-	if errors.Is(err, virtual.ErrNotVirtual) {
+	if err = db.openVirtual(ch, fs); errors.Is(err, virtual.ErrNotVirtual) {
 		return db.openUnary(ch, fs)
 	}
 	return err

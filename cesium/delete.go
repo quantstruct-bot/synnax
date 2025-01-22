@@ -12,9 +12,10 @@ package cesium
 import (
 	"context"
 	"io/fs"
-	"math/rand"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/synnaxlabs/x/errors"
 	"github.com/synnaxlabs/x/signal"
@@ -50,6 +51,12 @@ func keyToDirName(ch ChannelKey) string {
 	return strconv.Itoa(int(ch))
 }
 
+const deleteChannelSuffix = "-DELETE-"
+
+func deleteChannelKey(ch ChannelKey) string {
+	return keyToDirName(ch) + deleteChannelSuffix + uuid.New().String()
+}
+
 // DeleteChannel deletes a channel by its key.
 // This method returns an error if there are other channels depending on the current
 // channel, or if the current channel is being written to or read from.
@@ -62,8 +69,10 @@ func (db *DB) DeleteChannel(ch ChannelKey) error {
 	// directory, which may take a longer time.
 	// Rename the file to have a random suffix in case the channel is repeatedly created
 	// and deleted.
-	oldName := keyToDirName(ch)
-	newName := oldName + "-DELETE-" + strconv.Itoa(rand.Int())
+	var (
+		oldName = keyToDirName(ch)
+		newName = deleteChannelKey(ch)
+	)
 	if err := (func() error {
 		db.mu.Lock()
 		defer db.mu.Unlock()
@@ -71,13 +80,11 @@ func (db *DB) DeleteChannel(ch ChannelKey) error {
 			return err
 		}
 		err := db.fs.Rename(oldName, newName)
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		return err
+		return errors.Skip(err, fs.ErrNotExist)
 	})(); err != nil {
 		return err
 	}
+
 	return db.fs.Remove(newName)
 }
 
@@ -107,26 +114,24 @@ func (db *DB) DeleteChannels(chs []ChannelKey) (err error) {
 
 	// Do a pass first to remove all non-index channels
 	for _, ch := range chs {
-		udb, uok := db.unaryDBs[ch]
+		uDB, uOk := db.unaryDBs[ch]
 
-		if !uok || udb.Channel().IsIndex {
-			if udb.Channel().IsIndex {
+		if !uOk || uDB.Channel().IsIndex {
+			if uDB.Channel().IsIndex {
 				indexChannels = append(indexChannels, ch)
 			}
 			continue
 		}
 
-		err = db.removeChannel(ch)
-		if err != nil {
+		if err = db.removeChannel(ch); err != nil {
 			return
 		}
 
 		// Rename the files first, so we can avoid hogging the mutex while deleting
 		// the directory, which may take a longer time.
 		oldName := keyToDirName(ch)
-		newName := oldName + "-DELETE-" + strconv.Itoa(rand.Int())
-		err = db.fs.Rename(oldName, newName)
-		if err != nil {
+		newName := deleteChannelKey(ch)
+		if err = db.fs.Rename(oldName, newName); err != nil {
 			return
 		}
 
@@ -135,13 +140,12 @@ func (db *DB) DeleteChannels(chs []ChannelKey) (err error) {
 
 	// Do another pass to remove all index channels
 	for _, ch := range indexChannels {
-		err = db.removeChannel(ch)
-		if err != nil {
+		if err = db.removeChannel(ch); err != nil {
 			return
 		}
 
 		oldName := keyToDirName(ch)
-		newName := oldName + "-DELETE-" + strconv.Itoa(rand.Int())
+		newName := deleteChannelKey(ch)
 		err = db.fs.Rename(oldName, newName)
 		if err != nil {
 			return
@@ -156,34 +160,28 @@ func (db *DB) DeleteChannels(chs []ChannelKey) (err error) {
 // removeChannel removes ch from db.unaryDBs or db.virtualDBs. If the key does not exist
 // or if there is an open entity on the specified database.
 func (db *DB) removeChannel(ch ChannelKey) error {
-	udb, uok := db.unaryDBs[ch]
-	if uok {
-		if udb.Channel().IsIndex {
-			for otherDBKey := range db.unaryDBs {
-				if otherDBKey == ch {
-					continue
-				}
-				otherDB := db.unaryDBs[otherDBKey]
-				if otherDB.Channel().Index == udb.Channel().Key {
+	if uDB, uOk := db.unaryDBs[ch]; uOk {
+		if uDB.Channel().IsIndex {
+			for otherDBKey, otherDB := range db.unaryDBs {
+				if otherDBKey != ch && otherDB.Channel().Index == uDB.Channel().Key {
 					return errors.Newf(
 						"cannot delete channel %v "+
 							"because it indexes data in channel %v",
-						udb.Channel(),
+						uDB.Channel(),
 						otherDB.Channel(),
 					)
 				}
 			}
 		}
 
-		if err := udb.Close(); err != nil {
+		if err := uDB.Close(); err != nil {
 			return err
 		}
 		delete(db.unaryDBs, ch)
 		return nil
 	}
-	vdb, vok := db.virtualDBs[ch]
-	if vok {
-		if err := vdb.Close(); err != nil {
+	if vDB, vOk := db.virtualDBs[ch]; vOk {
+		if err := vDB.Close(); err != nil {
 			return err
 		}
 		delete(db.virtualDBs, ch)
@@ -265,33 +263,39 @@ func (db *DB) DeleteTimeRange(
 	return nil
 }
 
-func (db *DB) garbageCollect(ctx context.Context, maxGoRoutine int64) error {
-	_, span := db.T.Debug(ctx, "garbage_collect")
-	defer span.End()
-	db.mu.RLock()
+func (db *DB) garbageCollect(ctx context.Context, maxRoutines int64) (err error) {
 	var (
-		sem     = semaphore.NewWeighted(maxGoRoutine)
-		sCtx, _ = signal.Isolated()
+		_, span      = db.T.Debug(ctx, "garbage_collect")
+		sCtx, cancel = signal.Isolated()
+		sem          = semaphore.NewWeighted(maxRoutines)
 	)
-	for _, udb := range db.unaryDBs {
-		if err := sem.Acquire(ctx, 1); err != nil {
-			db.mu.RUnlock()
+	db.mu.RLock()
+	defer func() {
+		db.mu.RUnlock()
+		// If error is not nil here,it means we failed to acquire the semaphore,
+		// so we cancel the wrapped context to stop all the goroutines.
+		if err != nil {
+			cancel()
+		}
+		err = errors.Combine(err, sCtx.Wait())
+		span.End()
+	}()
+	for _, uDB := range db.unaryDBs {
+		if err = sem.Acquire(ctx, 1); err != nil {
 			return err
 		}
-		udb := udb
-		sCtx.Go(func(_ctx context.Context) error {
+		uDB := uDB
+		sCtx.Go(func(ctx context.Context) error {
 			defer sem.Release(1)
-			return udb.GarbageCollect(_ctx)
+			return uDB.GarbageCollect(ctx)
 		}, signal.RecoverWithErrOnPanic())
 	}
-	db.mu.RUnlock()
-	return sCtx.Wait()
+	return
 }
 
-func (db *DB) startGC(sCtx signal.Context, opts *options) {
-	signal.GoTick(sCtx, opts.gcCfg.GCTryInterval, func(ctx context.Context, time time.Time) error {
-		err := db.garbageCollect(ctx, opts.gcCfg.MaxGoroutine)
-		if err != nil {
+func (db *DB) startGC(sCtx signal.Context) {
+	signal.GoTick(sCtx, db.gcCfg.GCTryInterval, func(ctx context.Context, time time.Time) error {
+		if err := db.garbageCollect(ctx, db.gcCfg.MaxGoroutine); err != nil {
 			db.L.Error("garbage collection error", zap.Error(err))
 		}
 		return nil
