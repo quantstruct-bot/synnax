@@ -66,6 +66,27 @@ func (db *DB) RetrieveChannel(ctx context.Context, key ChannelKey) (Channel, err
 	return db.retrieveChannel(ctx, key)
 }
 
+// ChannelCount returns the number of channels in the database.
+func (db *DB) ChannelCount() int {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return len(db.mu.unaryDBs) + len(db.mu.virtualDBs)
+}
+
+// ChannelKeys returns the keys of all the channels in the database.
+func (db *DB) ChannelKeys() []ChannelKey {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	keys := make([]ChannelKey, 0, len(db.mu.unaryDBs)+len(db.mu.virtualDBs))
+	for k := range db.mu.unaryDBs {
+		keys = append(keys, k)
+	}
+	for k := range db.mu.virtualDBs {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // retrieveChannel retrieves a channel from the database. This method is not safe
 // for concurrent use, and the db must be locked before calling.
 func (db *DB) retrieveChannel(_ context.Context, key ChannelKey) (Channel, error) {
@@ -99,6 +120,7 @@ func (db *DB) RenameChannels(ctx context.Context, keys []ChannelKey, names []str
 	return nil
 }
 
+// RenameChannel renames the channel with the specified key to newName.
 func (db *DB) RenameChannel(ctx context.Context, key ChannelKey, newName string) error {
 	if db.closed.Load() {
 		return errDBClosed

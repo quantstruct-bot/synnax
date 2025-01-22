@@ -32,10 +32,7 @@ func newRelay(sCtx signal.Context) *relay {
 		confluence.RecoverWithErrOnPanic(),
 		confluence.WithRetryOnPanic(),
 	)
-	return &relay{
-		delta: delta,
-		inlet: frames,
-	}
+	return &relay{delta: delta, inlet: frames}
 }
 
 func (r *relay) connect(buffer int) (confluence.Outlet[Frame], func()) {

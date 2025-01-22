@@ -11,7 +11,9 @@ package channel
 
 import (
 	"context"
+	"github.com/synnaxlabs/alamos"
 	"github.com/synnaxlabs/x/observe"
+	"go.uber.org/zap"
 
 	"github.com/synnaxlabs/x/types"
 
@@ -50,16 +52,19 @@ type ReadWriteable interface {
 // service is central entity for managing channels within delta's distribution layer. It provides facilities for creating
 // and retrieving channels.
 type service struct {
+	alamos.Instrumentation
 	*gorp.DB
 	Writer
 	proxy *leaseProxy
 	otg   *ontology.Ontology
 	group group.Group
+	ts    *ts.DB
 }
 
 var _ Service = (*service)(nil)
 
 type ServiceConfig struct {
+	alamos.Instrumentation
 	HostResolver     core.HostResolver
 	ClusterDB        *gorp.DB
 	TSChannel        *ts.DB
@@ -82,6 +87,7 @@ func (c ServiceConfig) Validate() error {
 }
 
 func (c ServiceConfig) Override(other ServiceConfig) ServiceConfig {
+	c.Instrumentation = override.Zero(c.Instrumentation, other.Instrumentation)
 	c.HostResolver = override.Nil(c.HostResolver, other.HostResolver)
 	c.ClusterDB = override.Nil(c.ClusterDB, other.ClusterDB)
 	c.TSChannel = override.Nil(c.TSChannel, other.TSChannel)
@@ -112,10 +118,12 @@ func New(ctx context.Context, configs ...ServiceConfig) (Service, error) {
 		return nil, err
 	}
 	s := &service{
-		DB:    cfg.ClusterDB,
-		proxy: proxy,
-		otg:   cfg.Ontology,
-		group: g,
+		Instrumentation: cfg.Instrumentation,
+		DB:              cfg.ClusterDB,
+		proxy:           proxy,
+		otg:             cfg.Ontology,
+		group:           g,
+		ts:              cfg.TSChannel,
 	}
 	s.Writer = s.NewWriter(nil)
 	if cfg.Ontology != nil {
@@ -151,4 +159,41 @@ func (s *service) validateChannels(ctx context.Context, channels []Channel) (res
 		res = append(res, channels[i])
 	}
 	return
+}
+
+func (s *service) checkForTSMismatches(ctx context.Context) error {
+	metaCount, err := gorp.NewRetrieve[Key, Channel]().Where(func(c *Channel) bool {
+		return !c.Free()
+	}).Count(ctx, s.DB)
+	if err != nil {
+		return err
+	}
+	tsCount := s.ts.ChannelCount()
+	if metaCount >= tsCount {
+		return nil
+	}
+
+	ins := s.Instrumentation.Child("mismatch")
+	ins.L.Warn(
+		"encountered mismatch between time-series and meta engines. resolving",
+		zap.Int("meta", metaCount),
+		zap.Int("ts", tsCount),
+	)
+
+	// Means there are channels in TS that are not in the meta
+	tsKeys := s.ts.ChannelKeys()
+	for _, key := range tsKeys {
+		exists, err := s.NewRetrieve().WhereKeys(Key(key)).Exists(ctx, s.DB)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
+		ins.L.Warn("deleting channel from time-series", zap.String("key", key))
+		if err = s.ts.DeleteChannel(key); err != nil {
+			return err
+		}
+	}
+	return nil
 }

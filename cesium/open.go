@@ -64,6 +64,7 @@ func Open(dirname string, opts ...Option) (*DB, error) {
 				i.Name()),
 				zap.Error(err),
 			)
+			db.maybePurgeStrandedDeletionDir(i.Name())
 			continue
 		}
 		if err = db.openVirtualOrUnary(Channel{Key: ChannelKey(key)}); err != nil {

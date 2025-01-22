@@ -38,7 +38,7 @@ var _ = Describe("Garbage collection", Ordered, func() {
 					fs, cleanUp = makeFS()
 					db = MustSucceed(cesium.Open("",
 						cesium.WithGC(&cesium.GCConfig{
-							MaxGoroutine:  10,
+							MaxRoutines:   10,
 							GCTryInterval: 10 * telem.Millisecond.Duration(),
 							GCThreshold:   math.SmallestNonzeroFloat32,
 						}),
@@ -152,7 +152,7 @@ var _ = Describe("Garbage collection", Ordered, func() {
 					fs, cleanUp = makeFS()
 					db = MustSucceed(cesium.Open("",
 						cesium.WithGC(&cesium.GCConfig{
-							MaxGoroutine:  10,
+							MaxRoutines:   10,
 							GCTryInterval: 10 * telem.Millisecond.Duration(),
 							GCThreshold:   float32(250) / 719,
 						}),
@@ -228,7 +228,7 @@ var _ = Describe("Garbage collection", Ordered, func() {
 					fs, cleanUp = makeFS()
 					db = MustSucceed(cesium.Open("",
 						cesium.WithGC(&cesium.GCConfig{
-							MaxGoroutine:  10,
+							MaxRoutines:   10,
 							GCTryInterval: 10 * telem.Millisecond.Duration(),
 							GCThreshold:   1,
 						}),

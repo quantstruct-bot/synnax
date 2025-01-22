@@ -13,6 +13,7 @@ import (
 	"context"
 	"io/fs"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,15 +25,14 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// GCConfig configures the garbage collection process for the database.
 type GCConfig struct {
-	// MaxGoroutine is the maximum number of GoRoutines that can be launched for
+	// MaxRoutines is the maximum number of GoRoutines that can be launched for
 	// each try of garbage collection.
-	MaxGoroutine int64
-
+	MaxRoutines int64
 	// GCTryInterval is the interval of time between two tries of garbage collection
 	// are started.
 	GCTryInterval time.Duration
-
 	// GCThreshold is the minimum tombstone proportion of the Filesize to trigger a GC.
 	// Must be in (0, 1].
 	// Note: Setting this value to 0 will have NO EFFECT as it is the default value.
@@ -42,7 +42,7 @@ type GCConfig struct {
 }
 
 var DefaultGCConfig = GCConfig{
-	MaxGoroutine:  10,
+	MaxRoutines:   10,
 	GCTryInterval: 30 * time.Second,
 	GCThreshold:   0.2,
 }
@@ -53,8 +53,12 @@ func keyToDirName(ch ChannelKey) string {
 
 const deleteChannelSuffix = "-DELETE-"
 
-func deleteChannelKey(ch ChannelKey) string {
+func deleteDirName(ch ChannelKey) string {
 	return keyToDirName(ch) + deleteChannelSuffix + uuid.New().String()
+}
+
+func isDeleteDir(name string) bool {
+	return strings.Contains(name, deleteChannelSuffix)
 }
 
 // DeleteChannel deletes a channel by its key.
@@ -71,7 +75,7 @@ func (db *DB) DeleteChannel(ch ChannelKey) error {
 	// and deleted.
 	var (
 		oldName = keyToDirName(ch)
-		newName = deleteChannelKey(ch)
+		newName = deleteDirName(ch)
 	)
 	if err := (func() error {
 		db.mu.Lock()
@@ -86,6 +90,19 @@ func (db *DB) DeleteChannel(ch ChannelKey) error {
 	}
 
 	return db.fs.Remove(newName)
+}
+
+func (db *DB) maybePurgeStrandedDeletionDir(dirName string) {
+	if isDeleteDir(dirName) {
+		return
+	}
+	db.L.Info("found stranded deletion directory", zap.String("directory", dirName))
+	if err := db.fs.Remove(dirName); err != nil {
+		db.L.Warn("failed to remove stranded deletion directory",
+			zap.String("directory", dirName),
+			zap.Error(err),
+		)
+	}
 }
 
 // DeleteChannels deletes many channels by their keys.
@@ -114,7 +131,7 @@ func (db *DB) DeleteChannels(chs []ChannelKey) (err error) {
 
 	// Do a pass first to remove all non-index channels
 	for _, ch := range chs {
-		uDB, uOk := db.unaryDBs[ch]
+		uDB, uOk := db.mu.unaryDBs[ch]
 
 		if !uOk || uDB.Channel().IsIndex {
 			if uDB.Channel().IsIndex {
@@ -130,7 +147,7 @@ func (db *DB) DeleteChannels(chs []ChannelKey) (err error) {
 		// Rename the files first, so we can avoid hogging the mutex while deleting
 		// the directory, which may take a longer time.
 		oldName := keyToDirName(ch)
-		newName := deleteChannelKey(ch)
+		newName := deleteDirName(ch)
 		if err = db.fs.Rename(oldName, newName); err != nil {
 			return
 		}
@@ -145,7 +162,7 @@ func (db *DB) DeleteChannels(chs []ChannelKey) (err error) {
 		}
 
 		oldName := keyToDirName(ch)
-		newName := deleteChannelKey(ch)
+		newName := deleteDirName(ch)
 		err = db.fs.Rename(oldName, newName)
 		if err != nil {
 			return
@@ -160,9 +177,9 @@ func (db *DB) DeleteChannels(chs []ChannelKey) (err error) {
 // removeChannel removes ch from db.unaryDBs or db.virtualDBs. If the key does not exist
 // or if there is an open entity on the specified database.
 func (db *DB) removeChannel(ch ChannelKey) error {
-	if uDB, uOk := db.unaryDBs[ch]; uOk {
+	if uDB, uOk := db.mu.unaryDBs[ch]; uOk {
 		if uDB.Channel().IsIndex {
-			for otherDBKey, otherDB := range db.unaryDBs {
+			for otherDBKey, otherDB := range db.mu.unaryDBs {
 				if otherDBKey != ch && otherDB.Channel().Index == uDB.Channel().Key {
 					return errors.Newf(
 						"cannot delete channel %v "+
@@ -177,14 +194,14 @@ func (db *DB) removeChannel(ch ChannelKey) error {
 		if err := uDB.Close(); err != nil {
 			return err
 		}
-		delete(db.unaryDBs, ch)
+		delete(db.mu.unaryDBs, ch)
 		return nil
 	}
-	if vDB, vOk := db.virtualDBs[ch]; vOk {
+	if vDB, vOk := db.mu.virtualDBs[ch]; vOk {
 		if err := vDB.Close(); err != nil {
 			return err
 		}
-		delete(db.virtualDBs, ch)
+		delete(db.mu.virtualDBs, ch)
 		return nil
 	}
 
@@ -209,9 +226,9 @@ func (db *DB) DeleteTimeRange(
 	)
 
 	for _, ch := range chs {
-		udb, uok := db.unaryDBs[ch]
-		if !uok {
-			if vdb, vok := db.virtualDBs[ch]; vok {
+		uDB, uOk := db.mu.unaryDBs[ch]
+		if !uOk {
+			if vdb, vok := db.mu.virtualDBs[ch]; vok {
 				return errors.Newf(
 					"cannot delete time range from virtual channel %v",
 					vdb.Channel(),
@@ -221,7 +238,7 @@ func (db *DB) DeleteTimeRange(
 		}
 
 		// Cannot delete an index channel that other channels rely on.
-		if udb.Channel().IsIndex {
+		if uDB.Channel().IsIndex {
 			indexChannels = append(indexChannels, ch)
 			continue
 		}
@@ -230,16 +247,16 @@ func (db *DB) DeleteTimeRange(
 	}
 
 	for _, ch := range dataChannels {
-		udb := db.unaryDBs[ch]
+		udb := db.mu.unaryDBs[ch]
 		if err := udb.Delete(ctx, tr); err != nil {
 			return err
 		}
 	}
 
 	for _, ch := range indexChannels {
-		udb := db.unaryDBs[ch]
+		udb := db.mu.unaryDBs[ch]
 		// Cannot delete an index channel that other channels rely on.
-		for otherDBKey, otherDB := range db.unaryDBs {
+		for otherDBKey, otherDB := range db.mu.unaryDBs {
 			if otherDBKey == ch || otherDB.Channel().Index != ch {
 				continue
 			}
@@ -280,7 +297,7 @@ func (db *DB) garbageCollect(ctx context.Context, maxRoutines int64) (err error)
 		err = errors.Combine(err, sCtx.Wait())
 		span.End()
 	}()
-	for _, uDB := range db.unaryDBs {
+	for _, uDB := range db.mu.unaryDBs {
 		if err = sem.Acquire(ctx, 1); err != nil {
 			return err
 		}
@@ -295,7 +312,7 @@ func (db *DB) garbageCollect(ctx context.Context, maxRoutines int64) (err error)
 
 func (db *DB) startGC(sCtx signal.Context) {
 	signal.GoTick(sCtx, db.gcCfg.GCTryInterval, func(ctx context.Context, time time.Time) error {
-		if err := db.garbageCollect(ctx, db.gcCfg.MaxGoroutine); err != nil {
+		if err := db.garbageCollect(ctx, db.gcCfg.MaxRoutines); err != nil {
 			db.L.Error("garbage collection error", zap.Error(err))
 		}
 		return nil

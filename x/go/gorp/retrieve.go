@@ -105,6 +105,70 @@ func (r Retrieve[K, E]) Exists(ctx context.Context, tx Tx) (bool, error) {
 	return checkExists[K, E](ctx, r.Params, tx)
 }
 
+// Count returns the number of entries that match the query criteria without actually
+// retrieving the entries themselves.
+func (r Retrieve[K, E]) Count(ctx context.Context, tx Tx) (int, error) {
+	checkForNilTx("Retriever.Count", tx)
+	_, ok := getWhereKeys[K](r.Params)
+	f := lo.Ternary(ok, keysCount[K, E], filterCount[K, E])
+	return f(ctx, r.Params, tx)
+}
+
+func keysCount[K Key, E Entry[K]](
+	ctx context.Context,
+	q query.Parameters,
+	tx Tx,
+) (int, error) {
+	var (
+		count           int
+		keys, _         = getWhereKeys[K](q)
+		f               = getFilters[K, E](q)
+		keysResult, err = WrapReader[K, E](tx).GetMany(ctx, keys)
+	)
+	for _, e := range keysResult {
+		if f.exec(&e) {
+			count++
+		}
+	}
+	return count, err
+}
+
+func filterCount[K Key, E Entry[K]](
+	ctx context.Context,
+	q query.Parameters,
+	tx Tx,
+) (count int, err error) {
+	var (
+		f               = getFilters[K, E](q)
+		limit, hasLimit = GetLimit(q)
+		offset          = GetOffset(q)
+		validCount      int
+	)
+	iter, err := WrapReader[K, E](tx).OpenIterator(IterOptions{
+		prefix: getWherePrefix(q),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		err = errors.Combine(err, iter.Close())
+	}()
+	for iter.First(); iter.Valid(); iter.Next() {
+		v := iter.Value(ctx)
+		if f.exec(v) {
+			validCount++
+			// Only count entries after the offset
+			if validCount > offset {
+				count++
+				if hasLimit && count >= limit {
+					break
+				}
+			}
+		}
+	}
+	return count, nil
+}
+
 const filtersKey query.Parameter = "filters"
 
 type filter[K Key, E Entry[K]] struct {
@@ -292,9 +356,12 @@ func filterRetrieve[K Key, E Entry[K]](
 	for iter.First(); iter.Valid(); iter.Next() {
 		v := iter.Value(ctx)
 		if f.exec(v) {
-			validCount += 1
-			if (validCount > offset) && (!limitOk || validCount <= limit+offset) {
+			validCount++
+			if validCount > offset {
 				entries.Add(*v)
+				if limitOk && entries.changes >= limit {
+					break
+				}
 			}
 		}
 	}

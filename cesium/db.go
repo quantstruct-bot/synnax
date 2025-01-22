@@ -71,23 +71,34 @@ type DB struct {
 }
 
 // Write writes the frame to database at the specified start time.
-func (db *DB) Write(ctx context.Context, start telem.TimeStamp, frame Frame) error {
+func (db *DB) Write(
+	ctx context.Context,
+	start telem.TimeStamp,
+	frame Frame,
+) (err error) {
 	if db.closed.Load() {
 		return errDBClosed
 	}
 	_, span := db.T.Bench(ctx, "write")
-	defer span.End()
-	w, err := db.OpenWriter(ctx, WriterConfig{Start: start, Channels: frame.Keys})
+	defer func() { err = span.EndWith(err) }()
+	var w *Writer
+	w, err = db.OpenWriter(ctx, WriterConfig{Start: start, Channels: frame.Keys})
 	if err != nil {
-		return span.Error(err)
+		return
 	}
+	defer func() { err = w.Close() }()
 	w.Write(frame)
 	w.Commit()
-	return span.Error(w.Close())
+	return
 }
 
 // WriteArray writes a series into the specified channel at the specified start time.
-func (db *DB) WriteArray(ctx context.Context, key core.ChannelKey, start telem.TimeStamp, series telem.Series) error {
+func (db *DB) WriteArray(
+	ctx context.Context,
+	key core.ChannelKey,
+	start telem.TimeStamp,
+	series telem.Series,
+) error {
 	if db.closed.Load() {
 		return errDBClosed
 	}

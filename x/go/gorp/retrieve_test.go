@@ -279,4 +279,52 @@ var _ = Describe("Retrieve", Ordered, func() {
 			Expect(res).To(Equal(entries))
 		})
 	})
+
+	Describe("Count", func() {
+		It("Should return the total number of entries when no filters are applied", func() {
+			count, err := gorp.NewRetrieve[int, entry]().Count(ctx, tx)
+			Expect(err).To(Not(HaveOccurred()))
+			Expect(count).To(Equal(10))
+		})
+
+		It("Should return the correct count when using Where filters", func() {
+			count, err := gorp.NewRetrieve[int, entry]().
+				Where(func(e *entry) bool { return e.ID < 5 }).
+				Count(ctx, tx)
+			Expect(err).To(Not(HaveOccurred()))
+			Expect(count).To(Equal(5))
+		})
+
+		It("Should return the correct count when using WhereKeys", func() {
+			count, err := gorp.NewRetrieve[int, entry]().
+				WhereKeys(entries[0].GorpKey(), entries[1].GorpKey()).
+				Count(ctx, tx)
+			Expect(err).To(Not(HaveOccurred()))
+			Expect(count).To(Equal(2))
+		})
+
+		It("Should return zero when no entries match the criteria", func() {
+			count, err := gorp.NewRetrieve[int, entry]().
+				Where(func(e *entry) bool { return e.ID > 100 }).
+				Count(ctx, tx)
+			Expect(err).To(Not(HaveOccurred()))
+			Expect(count).To(Equal(0))
+		})
+
+		It("Should respect limit when counting entries", func() {
+			count, err := gorp.NewRetrieve[int, entry]().
+				Limit(5).
+				Count(ctx, tx)
+			Expect(err).To(Not(HaveOccurred()))
+			Expect(count).To(Equal(5))
+		})
+
+		It("Should respect offset when counting entries", func() {
+			count, err := gorp.NewRetrieve[int, entry]().
+				Offset(8).
+				Count(ctx, tx)
+			Expect(err).To(Not(HaveOccurred()))
+			Expect(count).To(Equal(2)) // Only 2 entries remain after offset of 8
+		})
+	})
 })
