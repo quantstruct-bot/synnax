@@ -220,8 +220,8 @@ func (db *DB) newStreamWriter(ctx context.Context, cfgs ...WriterConfig) (w *str
 	// ensures that we provide a valid domain alignment to all unary writers for a
 	// particular index group.
 	for i, key := range cfg.Channels {
-		u, uOk := db.unaryDBs[key]
-		v, vOk := db.virtualDBs[key]
+		u, uOk := db.mu.unaryDBs[key]
+		v, vOk := db.mu.virtualDBs[key]
 		if !vOk && !uOk {
 			return nil, core.NewErrChannelNotFound(key)
 		}
@@ -293,7 +293,7 @@ func (db *DB) newStreamWriter(ctx context.Context, cfgs ...WriterConfig) (w *str
 
 	// On the second pass, we open all domain indexed writers that have indexes.
 	for i, key := range cfg.Channels {
-		u, uOk := db.unaryDBs[key]
+		u, uOk := db.mu.unaryDBs[key]
 		// Ignore virtual, index, and rate based channels.
 		if !uOk || u.Channel().IsIndex || u.Channel().Index == 0 {
 			continue
@@ -333,7 +333,7 @@ func (db *DB) newStreamWriter(ctx context.Context, cfgs ...WriterConfig) (w *str
 		WriterConfig: cfg,
 		internal:     make([]*idxWriter, 0, len(domainWriters)+len(rateWriters)),
 		relay:        db.relay.inlet,
-		virtual:      &virtualWriter{internal: virtualWriters, digestKey: db.digests.key},
+		virtual:      &virtualWriter{internal: virtualWriters, digestKey: db.mu.controlDigests.key},
 		updateDBControl: func(ctx context.Context, update ControlUpdate) error {
 			db.mu.RLock()
 			defer db.mu.RUnlock()
@@ -353,7 +353,7 @@ func (db *DB) openDomainIdxWriter(
 	idxKey ChannelKey,
 	cfg WriterConfig,
 ) (*idxWriter, error) {
-	u, ok := db.unaryDBs[idxKey]
+	u, ok := db.mu.unaryDBs[idxKey]
 	if !ok {
 		return nil, core.NewErrChannelNotFound(idxKey)
 	}
