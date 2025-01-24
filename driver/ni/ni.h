@@ -98,28 +98,110 @@ inline const std::map<std::string, int32_t> UNITS_MAP = {
     // TODO: verify this is an option in the console for sensitivity units
 };
 
+///////////////////////////////////////////////////////////////////////////////////
+//                             Channel Configs                                   //
+///////////////////////////////////////////////////////////////////////////////////
 
+// Base configuration for all NI channels
 struct ChannelConfig {
     uint32_t channel_key;
     uint32_t state_channel_key;
     std::string name;
     std::string channel_type;
-    std::shared_ptr<ni::Analog> ni_channel;
     bool enabled = true;
     synnax::DataType data_type;
+
+    ChannelConfig() = default;
+
+    explicit ChannelConfig(config::Parser& parser) 
+        : channel_key(parser.required<uint32_t>("channel")),
+          channel_type(parser.required<std::string>("type")),
+          enabled(parser.optional<bool>("enabled", true)) {}
+
+    virtual ~ChannelConfig() = default;
 };
 
+// Analog-specific channel configuration
+struct AnalogChannelConfig : public ChannelConfig {
+    std::shared_ptr<ni::Analog> ni_channel;
+    
+    explicit AnalogChannelConfig(config::Parser& parser) : ChannelConfig(parser) {
+        // Analog channel names are formatted: <device_name>/ai<port>
+        auto port = std::to_string(parser.required<uint64_t>("port"));
+        name = "/ai" + port;  // device_name will be prepended later
+    }
+};
+
+// Digital-specific channel configuration
+struct DigitalChannelConfig : public ChannelConfig {
+    explicit DigitalChannelConfig(config::Parser& parser) : ChannelConfig(parser) {
+        // Digital channel names are formatted: <device_name>/port<port>/line<line>
+        auto port = "port" + std::to_string(parser.required<uint64_t>("port"));
+        auto line = "line" + std::to_string(parser.required<uint64_t>("line"));
+        name = "/" + port + "/" + line;  // device_name will be prepended later
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////////
+//                              Reader Configs                                   //
+///////////////////////////////////////////////////////////////////////////////////
 struct ReaderConfig {
     std::string device_key;
-    std::vector<ChannelConfig> channels;
-    synnax::Rate sample_rate = synnax::Rate(1);
-    synnax::Rate stream_rate = synnax::Rate(1);
     std::string device_name;
     std::string task_name;
-    std::string timing_source; // for sample clock
-    std::uint64_t period = 0;
+    std::string timing_source;
+    synnax::Rate sample_rate = synnax::Rate(1);
+    synnax::Rate stream_rate = synnax::Rate(1);
     synnax::ChannelKey task_key;
     std::set<uint32_t> index_keys;
+    uint64_t period = 0;
+
+    ReaderConfig() = default;
+
+    explicit ReaderConfig(config::Parser& parser)
+        : device_key(parser.required<std::string>("device")),
+          device_name(parser.optional<std::string>("device_name", "")),
+          task_name(parser.optional<std::string>("task_name", "")),
+          timing_source(parser.optional<std::string>("timing_source", "none")),
+          sample_rate(synnax::Rate(parser.required<uint64_t>("sample_rate"))),
+          stream_rate(synnax::Rate(parser.required<uint64_t>("stream_rate"))) {
+        
+        if (!parser.ok()) {
+            LOG(ERROR) << "Failed to parse reader config: " << parser.error_json().dump(4);
+        }
+    }
+
+    virtual ~ReaderConfig() = default;
+};
+
+// Analog-specific reader configuration
+struct AnalogReaderConfig : public ReaderConfig {
+    std::vector<AnalogChannelConfig> channels;
+
+    explicit AnalogReaderConfig(config::Parser& parser) : ReaderConfig(parser) {
+        parser.iter("channels", [this](config::Parser& channel_parser) {
+            auto channel = AnalogChannelConfig(channel_parser);
+            if (this->device_name != "") {
+                channel.name = this->device_name + channel.name;
+            }
+            channels.push_back(std::move(channel));
+        });
+    }
+};
+
+// Digital-specific reader configuration
+struct DigitalReaderConfig : public ReaderConfig {
+    std::vector<DigitalChannelConfig> channels;
+
+    explicit DigitalReaderConfig(config::Parser& parser) : ReaderConfig(parser) {
+        parser.iter("channels", [this](config::Parser& channel_parser) {
+            auto channel = DigitalChannelConfig(channel_parser);
+            if (this->device_name != "") {
+                channel.name = this->device_name + channel.name;
+            }
+            channels.push_back(std::move(channel));
+        });
+    }
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////

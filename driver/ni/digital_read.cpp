@@ -21,28 +21,13 @@
 using json = nlohmann::json;
 
 void ni::DigitalReadSource::parse_channels(config::Parser &parser) {
-    VLOG(1) << "[ni.reader] Parsing Channels for task " << this->reader_config.
-            task_name;
-    parser.iter("channels",
-                [&](config::Parser &channel_builder) {
-                    ni::ChannelConfig config;
-                    // digital channel names are formatted: <device_name>/port<port_number>/line<line_number>
-                    std::string port = "port" + std::to_string(
-                                           channel_builder.required<std::uint64_t>(
-                                               "port"));
-                    std::string line = "line" + std::to_string(
-                                           channel_builder.required<std::uint64_t>(
-                                               "line"));
-
-                    config.channel_key = channel_builder.required<uint32_t>("channel");
-                    config.name = (this->reader_config.device_name + "/" + port + "/" +
-                                   line);
-                    config.enabled = channel_builder.optional<bool>("enabled", true);
-                    this->reader_config.channels.push_back(config);
-                });
-    if (!parser.ok())
-        LOG(ERROR) << "Failed to parse channels for task " << this->
-                reader_config.task_name;
+    auto config = DigitalReaderConfig(parser);
+    this->reader_config = config;
+    for (size_t i = 0; i < config.channels.size(); i++) {
+        if (config.channels[i].enabled) {
+            this->channel_map[config.channels[i].name] = "channels." + std::to_string(i);
+        }
+    }
 }
 
 int ni::DigitalReadSource::create_channels() {
